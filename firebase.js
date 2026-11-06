@@ -17,7 +17,7 @@ export const db = getFirestore(app);
 export const auth = getAuth(app);
 
 // 관리자 계정 (firestore.rules에도 같은 주소가 들어 있어요)
-export const ADMIN_EMAIL = "pwoong99@gmail.com";
+export const ADMIN_EMAIL = "pwoong99@ai.jne.kr";
 
 // 처음 실행할 때 쓰는 기본값 — 관리자 화면에서 바꿀 수 있어요.
 export const DEFAULT_CONFIG = {
