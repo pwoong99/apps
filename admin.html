@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 · 웹앱 모음</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1>관리자</h1>
+        <p id="who">웹앱 모음 관리</p>
+      </div>
+      <div class="row gap">
+        <a class="btn" href="./">모음 페이지 보기</a>
+        <button id="logoutBtn" class="btn" hidden>로그아웃</button>
+      </div>
+    </header>
+
+    <!-- 로그인 화면 -->
+    <section id="loginView" class="panel center" style="margin-top:24px">
+      <p>관리자 구글 계정으로 로그인해 주세요.</p>
+      <button id="loginBtn" class="btn primary">구글 계정으로 로그인</button>
+      <p id="loginMsg" class="msg"></p>
+    </section>
+
+    <!-- 관리자 화면 -->
+    <div id="adminView" hidden style="margin-top:24px">
+      <nav class="tabs" id="adminTabs">
+        <button class="tab on" data-view="apps">앱 관리</button>
+        <button class="tab" data-view="cats">분류 관리</button>
+        <button class="tab" data-view="stats">통계</button>
+        <button class="tab" data-view="settings">페이지 설정</button>
+      </nav>
+
+      <!-- 앱 관리 -->
+      <section data-panel="apps">
+        <div class="panel">
+          <h2 id="formTitle">앱 추가</h2>
+          <form id="appForm" class="form">
+            <input type="hidden" id="f_id">
+            <label>제목<input id="f_title" required></label>
+            <label>링크<input id="f_url" required placeholder="https://"></label>
+            <div class="two">
+              <label>분류<select id="f_category"></select></label>
+              <label>대상<input id="f_audience" list="audienceList" placeholder="예: 교사용"></label>
+            </div>
+            <label>설명 (한 줄)<input id="f_desc" placeholder="카드에 보일 짧은 설명"></label>
+            <label class="check"><input type="checkbox" id="f_hidden"> 숨김 (로그인한 관리자에게만 보여요)</label>
+            <div class="row gap">
+              <button class="btn primary" type="submit" id="saveBtn">추가</button>
+              <button class="btn" type="button" id="cancelEdit" hidden>취소</button>
+            </div>
+          </form>
+          <datalist id="audienceList">
+            <option value="교사용"></option>
+            <option value="학생용"></option>
+            <option value="학부모용"></option>
+            <option value="교사·학생용"></option>
+            <option value="모두"></option>
+          </datalist>
+        </div>
+
+        <details class="panel">
+          <summary>여러 개 한꺼번에 추가</summary>
+          <p class="hint">
+            한 줄에 하나씩 <code>제목 | 링크 | 분류 | 대상 | 설명 | 숨김</code> 순서로 적어 주세요.
+            제목과 링크만 있어도 됩니다. 숨기려면 마지막 칸에 <code>숨김</code>이라고 적어요.
+            없는 분류 이름을 쓰면 새 분류로 추가돼요.
+          </p>
+          <textarea id="bulkText" rows="6" placeholder="퀵소 | https://script.google.com/... | 놀이·게임 | 학생용 | 2인용 보드게임"></textarea>
+          <div class="row gap">
+            <button class="btn primary" id="bulkBtn" type="button">한꺼번에 추가</button>
+            <span id="bulkMsg" class="msg"></span>
+          </div>
+        </details>
+
+        <div id="appList"></div>
+      </section>
+
+      <!-- 분류 관리 -->
+      <section data-panel="cats" hidden>
+        <div class="panel">
+          <h2>분류</h2>
+          <div id="catList"></div>
+          <div class="row gap" style="margin-top:12px">
+            <input id="newCat" placeholder="새 분류 이름">
+            <button class="btn primary" id="addCatBtn" type="button">추가</button>
+          </div>
+          <p class="hint">분류 이름을 바꾸면 그 분류에 있는 앱도 함께 바뀌어요. 앱이 들어 있는 분류는 삭제할 수 없어요.</p>
+        </div>
+      </section>
+
+      <!-- 통계 -->
+      <section data-panel="stats" hidden>
+        <div class="statgrid">
+          <div class="stat"><div class="label">전체 방문</div><div class="value" id="s_total">-</div></div>
+          <div class="stat"><div class="label">오늘 방문</div><div class="value" id="s_today">-</div></div>
+          <div class="stat"><div class="label">앱 클릭 합계</div><div class="value" id="s_clicks">-</div></div>
+          <div class="stat"><div class="label">등록된 앱</div><div class="value" id="s_apps">-</div></div>
+        </div>
+        <div class="panel">
+          <h2>최근 14일 방문</h2>
+          <div id="dailyBars" class="bars"></div>
+        </div>
+        <div class="panel">
+          <h2>앱별 클릭 수</h2>
+          <div id="clickBars" class="bars"></div>
+        </div>
+        <p class="hint">관리자로 로그인한 상태의 방문·클릭은 세지 않아요. 같은 창에서 새로고침한 것은 한 번만 세요.</p>
+      </section>
+
+      <!-- 페이지 설정 -->
+      <section data-panel="settings" hidden>
+        <div class="panel">
+          <h2>페이지 설정</h2>
+          <form id="settingsForm" class="form">
+            <label>페이지 제목<input id="s_title" required></label>
+            <label>소개 문구<input id="s_desc"></label>
+            <div><button class="btn primary" type="submit">저장</button></div>
+          </form>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script type="module">
+    import {
+      db, auth, ADMIN_EMAIL, DEFAULT_CONFIG, UNCATEGORIZED,
+      esc, safeUrl, dateKey, catOf, orderedCats, sortApps
+    } from "./firebase.js";
+    import {
+      collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
+      writeBatch, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import {
+      onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const $ = (id) => document.getElementById(id);
+    const val = (id) => $(id).value.trim();
+    let apps = [];
+    let config = { ...DEFAULT_CONFIG };
+
+    // ---------- 로그인 ----------
+    $("loginBtn").addEventListener("click", async () => {
+      $("loginMsg").textContent = "";
+      try {
+        await signInWithPopup(auth, new GoogleAuthProvider());
+      } catch (e) {
+        if (e.code !== "auth/popup-closed-by-user") {
+          $("loginMsg").textContent = "로그인하지 못했어요: " + (e.code || e.message);
+        }
+      }
+    });
+    $("logoutBtn").addEventListener("click", () => signOut(auth));
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user && user.email !== ADMIN_EMAIL) {
+        const email = user.email;
+        await signOut(auth);
+        $("loginMsg").textContent = `${email} 계정은 관리자가 아니에요.`;
+        return;
+      }
+      const ok = !!user;
+      $("loginView").hidden = ok;
+      $("adminView").hidden = !ok;
+      $("logoutBtn").hidden = !ok;
+      $("who").textContent = ok ? `${user.email} 로 로그인됨` : "웹앱 모음 관리";
+      if (ok) {
+        try { await loadAll(); }
+        catch (e) { console.error(e); toast("불러오지 못했어요: " + (e.code || e.message)); }
+      }
+    });
+
+    // ---------- 불러오기 ----------
+    async function loadAll() {
+      const snap = await getDoc(doc(db, "meta", "config"));
+      if (snap.exists()) {
+        config = { ...DEFAULT_CONFIG, ...snap.data() };
+      } else {
+        config = { ...DEFAULT_CONFIG };
+        await setDoc(doc(db, "meta", "config"), config);
+      }
+      await loadApps();
+      renderSettings();
+    }
+
+    async function loadApps() {
+      const snap = await getDocs(collection(db, "apps"));
+      apps = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      renderApps();
+      renderCats();
+      fillCategorySelect();
+    }
+
+    async function saveConfig() {
+      await setDoc(doc(db, "meta", "config"), config);
+    }
+
+    // ---------- 탭 ----------
+    $("adminTabs").addEventListener("click", (e) => {
+      const t = e.target.closest(".tab");
+      if (!t) return;
+      document.querySelectorAll("#adminTabs .tab").forEach((b) => b.classList.toggle("on", b === t));
+      document.querySelectorAll("[data-panel]").forEach((p) => { p.hidden = p.dataset.panel !== t.dataset.view; });
+      if (t.dataset.view === "stats") loadStats();
+    });
+
+    // ---------- 앱 추가·수정 ----------
+    function fillCategorySelect() {
+      const sel = $("f_category");
+      const current = sel.value;
+      const cats = orderedCats(config.categories, apps).filter((c) => c !== UNCATEGORIZED);
+      sel.innerHTML = cats.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join("")
+        + `<option value="">${UNCATEGORIZED}</option>`;
+      if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+    }
+
+    function resetForm() {
+      $("appForm").reset();
+      $("f_id").value = "";
+      $("formTitle").textContent = "앱 추가";
+      $("saveBtn").textContent = "추가";
+      $("cancelEdit").hidden = true;
+      fillCategorySelect();
+    }
+
+    function startEdit(a) {
+      $("f_id").value = a.id;
+      $("f_title").value = a.title || "";
+      $("f_url").value = a.url || "";
+      fillCategorySelect();
+      $("f_category").value = a.category || "";
+      $("f_audience").value = a.audience || "";
+      $("f_desc").value = a.desc || "";
+      $("f_hidden").checked = !!a.hidden;
+      $("formTitle").textContent = "앱 수정";
+      $("saveBtn").textContent = "저장";
+      $("cancelEdit").hidden = false;
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    $("cancelEdit").addEventListener("click", resetForm);
+
+    $("appForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const data = {
+        title: val("f_title"),
+        url: val("f_url"),
+        category: $("f_category").value,
+        audience: val("f_audience"),
+        desc: val("f_desc"),
+        hidden: $("f_hidden").checked
+      };
+      if (!/^https?:\/\//i.test(data.url)) return toast("링크는 https:// 로 시작해야 해요.");
+      const id = $("f_id").value;
+      try {
+        if (id) {
+          await updateDoc(doc(db, "apps", id), data);
+        } else {
+          await addDoc(collection(db, "apps"), {
+            ...data, clicks: 0, order: Date.now(), createdAt: serverTimestamp()
+          });
+        }
+        toast(id ? "수정했어요." : "추가했어요.");
+        resetForm();
+        await loadApps();
+      } catch (err) {
+        toast("저장하지 못했어요: " + (err.code || err.message));
+      }
+    });
+
+    // ---------- 한꺼번에 추가 ----------
+    $("bulkBtn").addEventListener("click", async () => {
+      const lines = $("bulkText").value.split("\n").map((l) => l.trim()).filter(Boolean);
+      if (!lines.length) return;
+      const errors = [];
+      const newCats = [];
+      const batch = writeBatch(db);
+      const base = Date.now();
+      let count = 0;
+
+      lines.forEach((line, i) => {
+        const [title = "", url = "", category = "", audience = "", desc = "", hid = ""] =
+          line.split("|").map((s) => s.trim());
+        if (!title || !/^https?:\/\//i.test(url)) { errors.push(i + 1); return; }
+        if (category && !config.categories.includes(category) && !newCats.includes(category)) newCats.push(category);
+        batch.set(doc(collection(db, "apps")), {
+          title, url, category, audience, desc,
+          hidden: hid === "숨김",
+          clicks: 0,
+          order: base + i,
+          createdAt: serverTimestamp()
+        });
+        count++;
+      });
+
+      try {
+        if (count) await batch.commit();
+        if (newCats.length) {
+          config.categories = [...config.categories, ...newCats];
+          await saveConfig();
+        }
+        $("bulkMsg").textContent = errors.length ? `${errors.join(", ")}번째 줄은 제목이나 링크가 없어 건너뛰었어요.` : "";
+        if (count) {
+          toast(`${count}개를 추가했어요.`);
+          if (!errors.length) $("bulkText").value = "";
+        }
+        await loadApps();
+      } catch (err) {
+        toast("추가하지 못했어요: " + (err.code || err.message));
+      }
+    });
+
+    // ---------- 앱 목록 ----------
+    function renderApps() {
+      const box = $("appList");
+      if (!apps.length) {
+        box.innerHTML = '<div class="empty">아직 등록된 앱이 없어요. 위에서 추가해 주세요.</div>';
+        return;
+      }
+      const cats = orderedCats(config.categories, apps).filter((c) => apps.some((a) => catOf(a) === c));
+      box.innerHTML = cats.map((c) => {
+        const items = sortApps(apps.filter((a) => catOf(a) === c));
+        return `<h3 class="group-title">${esc(c)}<span class="n">${items.length}</span></h3>` +
+          items.map((a, i) => `
+            <div class="arow${a.hidden ? " is-hidden" : ""}" data-id="${esc(a.id)}">
+              <div class="ainfo">
+                <a href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener">${esc(a.title)}</a>
+                <span class="meta">
+                  ${a.audience ? `<span class="badge">${esc(a.audience)}</span>` : ""}
+                  ${a.hidden ? `<span class="badge warn">숨김</span>` : ""}
+                  <span class="badge gray">클릭 ${a.clicks || 0}</span>
+                </span>
+                <div class="sub">${esc(a.desc || a.url)}</div>
+              </div>
+              <div class="aact">
+                <button class="btn small" data-act="up" ${i === 0 ? "disabled" : ""} title="위로">↑</button>
+                <button class="btn small" data-act="down" ${i === items.length - 1 ? "disabled" : ""} title="아래로">↓</button>
+                <button class="btn small" data-act="hide">${a.hidden ? "공개" : "숨김"}</button>
+                <button class="btn small" data-act="edit">수정</button>
+                <button class="btn small danger" data-act="del">삭제</button>
+              </div>
+            </div>`).join("");
+      }).join("");
+    }
+
+    $("appList").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn) return;
+      const id = btn.closest(".arow").dataset.id;
+      const a = apps.find((x) => x.id === id);
+      if (!a) return;
+      const act = btn.dataset.act;
+      try {
+        if (act === "edit") return startEdit(a);
+        if (act === "up" || act === "down") await moveApp(a, act === "up" ? -1 : 1);
+        if (act === "hide") {
+          await updateDoc(doc(db, "apps", id), { hidden: !a.hidden });
+          toast(a.hidden ? "공개했어요." : "숨겼어요.");
+        }
+        if (act === "del") {
+          if (!confirm(`'${a.title}'을(를) 삭제할까요? 클릭 수도 함께 지워져요.`)) return;
+          await deleteDoc(doc(db, "apps", id));
+          toast("삭제했어요.");
+        }
+        await loadApps();
+      } catch (err) {
+        toast("처리하지 못했어요: " + (err.code || err.message));
+      }
+    });
+
+    async function moveApp(a, dir) {
+      const items = sortApps(apps.filter((x) => catOf(x) === catOf(a)));
+      const i = items.findIndex((x) => x.id === a.id);
+      const j = i + dir;
+      if (j < 0 || j >= items.length) return;
+      [items[i], items[j]] = [items[j], items[i]];
+      const batch = writeBatch(db);
+      items.forEach((x, k) => batch.update(doc(db, "apps", x.id), { order: k }));
+      await batch.commit();
+    }
+
+    // ---------- 분류 관리 ----------
+    function renderCats() {
+      const cats = config.categories;
+      $("catList").innerHTML = cats.length ? cats.map((c, i) => {
+        const n = apps.filter((a) => a.category === c).length;
+        return `<div class="arow" data-i="${i}">
+          <div class="ainfo"><strong>${esc(c)}</strong> <span class="badge gray">앱 ${n}개</span></div>
+          <div class="aact">
+            <button class="btn small" data-act="up" ${i === 0 ? "disabled" : ""}>↑</button>
+            <button class="btn small" data-act="down" ${i === cats.length - 1 ? "disabled" : ""}>↓</button>
+            <button class="btn small" data-act="rename">이름 바꾸기</button>
+            <button class="btn small danger" data-act="del">삭제</button>
+          </div>
+        </div>`;
+      }).join("") : '<div class="empty">분류가 없어요.</div>';
+    }
+
+    $("catList").addEventListener("click", async (e) => {
+      const btn = e.target.closest("button[data-act]");
+      if (!btn) return;
+      const i = Number(btn.closest(".arow").dataset.i);
+      const cats = [...config.categories];
+      const name = cats[i];
+      const act = btn.dataset.act;
+      try {
+        if (act === "up" || act === "down") {
+          const j = act === "up" ? i - 1 : i + 1;
+          [cats[i], cats[j]] = [cats[j], cats[i]];
+          config.categories = cats;
+          await saveConfig();
+        }
+        if (act === "rename") {
+          const next = (prompt("새 분류 이름", name) || "").trim();
+          if (!next || next === name) return;
+          if (cats.includes(next)) return toast("이미 있는 분류 이름이에요.");
+          cats[i] = next;
+          const batch = writeBatch(db);
+          apps.filter((a) => a.category === name)
+            .forEach((a) => batch.update(doc(db, "apps", a.id), { category: next }));
+          batch.set(doc(db, "meta", "config"), { ...config, categories: cats });
+          await batch.commit();
+          config.categories = cats;
+          toast("이름을 바꿨어요.");
+        }
+        if (act === "del") {
+          if (apps.some((a) => a.category === name)) return toast("앱이 들어 있는 분류는 삭제할 수 없어요.");
+          if (!confirm(`'${name}' 분류를 삭제할까요?`)) return;
+          config.categories = cats.filter((c) => c !== name);
+          await saveConfig();
+          toast("삭제했어요.");
+        }
+        await loadApps();
+      } catch (err) {
+        toast("처리하지 못했어요: " + (err.code || err.message));
+      }
+    });
+
+    $("addCatBtn").addEventListener("click", async () => {
+      const name = val("newCat");
+      if (!name) return;
+      if (name === UNCATEGORIZED || config.categories.includes(name)) return toast("이미 있는 분류 이름이에요.");
+      config.categories = [...config.categories, name];
+      try {
+        await saveConfig();
+        $("newCat").value = "";
+        toast("분류를 추가했어요.");
+        await loadApps();
+      } catch (err) {
+        toast("추가하지 못했어요: " + (err.code || err.message));
+      }
+    });
+
+    // ---------- 통계 ----------
+    async function loadStats() {
+      try {
+        const [siteSnap, dailySnap] = await Promise.all([
+          getDoc(doc(db, "stats", "site")),
+          getDocs(collection(db, "daily"))
+        ]);
+        const daily = {};
+        dailySnap.forEach((d) => { daily[d.id] = d.data().visits || 0; });
+
+        $("s_total").textContent = (siteSnap.exists() ? siteSnap.data().visits : 0).toLocaleString();
+        $("s_today").textContent = (daily[dateKey()] || 0).toLocaleString();
+        $("s_clicks").textContent = apps.reduce((s, a) => s + (a.clicks || 0), 0).toLocaleString();
+        $("s_apps").textContent = apps.length;
+
+        const days = [];
+        for (let k = 13; k >= 0; k--) days.push(dateKey(k));
+        const maxDay = Math.max(1, ...days.map((d) => daily[d] || 0));
+        $("dailyBars").innerHTML = days.map((d) => {
+          const v = daily[d] || 0;
+          return `<div class="bar"><span class="name">${d.slice(5).replace("-", "월 ")}일</span>
+            <span class="track"><span class="fill" style="width:${(v / maxDay) * 100}%;display:block"></span></span>
+            <span class="num">${v}</span></div>`;
+        }).join("");
+
+        const ranked = [...apps].sort((a, b) => (b.clicks || 0) - (a.clicks || 0));
+        const maxClick = Math.max(1, ...ranked.map((a) => a.clicks || 0));
+        $("clickBars").innerHTML = ranked.length ? ranked.map((a) => `
+          <div class="bar"><span class="name" title="${esc(a.title)}">${esc(a.title)}</span>
+            <span class="track"><span class="fill" style="width:${((a.clicks || 0) / maxClick) * 100}%;display:block"></span></span>
+            <span class="num">${a.clicks || 0}</span></div>`).join("")
+          : '<div class="empty">앱이 없어요.</div>';
+      } catch (err) {
+        toast("통계를 불러오지 못했어요: " + (err.code || err.message));
+      }
+    }
+
+    // ---------- 페이지 설정 ----------
+    function renderSettings() {
+      $("s_title").value = config.siteTitle || "";
+      $("s_desc").value = config.siteDesc || "";
+    }
+
+    $("settingsForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      config.siteTitle = val("s_title");
+      config.siteDesc = val("s_desc");
+      try {
+        await saveConfig();
+        toast("저장했어요.");
+      } catch (err) {
+        toast("저장하지 못했어요: " + (err.code || err.message));
+      }
+    });
+
+    // ---------- 알림 ----------
+    let toastTimer;
+    function toast(msg) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove("show"), 2200);
+    }
+  </script>
+</body>
+</html>

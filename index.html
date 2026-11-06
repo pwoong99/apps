@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>웹앱 모음</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <h1 id="siteTitle">웹앱 모음</h1>
+        <p id="siteDesc"></p>
+      </div>
+    </header>
+
+    <div id="adminBar" class="notice" hidden>
+      관리자로 보고 있어요. 숨긴 앱도 보이고, 방문·클릭 수는 세지 않아요.
+      <a href="admin.html">관리자 화면으로</a>
+    </div>
+
+    <div class="toolbar">
+      <input id="search" class="search" type="search" placeholder="앱 이름이나 설명으로 찾기">
+    </div>
+
+    <nav id="tabs" class="tabs"></nav>
+
+    <main id="list"><div class="empty">불러오는 중…</div></main>
+
+    <footer>
+      <span>만든이 푸르이든</span>
+      <a href="admin.html">관리자</a>
+    </footer>
+  </div>
+
+  <script type="module">
+    import {
+      db, auth, ADMIN_EMAIL, DEFAULT_CONFIG,
+      esc, safeUrl, dateKey, catOf, orderedCats, sortApps
+    } from "./firebase.js";
+    import {
+      collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, increment
+    } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+    const $ = (id) => document.getElementById(id);
+    let apps = [];
+    let categories = [];
+    let isAdmin = false;
+    let activeCat = "전체";
+    let keyword = "";
+    let counted = false;
+
+    onAuthStateChanged(auth, async (user) => {
+      isAdmin = !!user && user.email === ADMIN_EMAIL;
+      $("adminBar").hidden = !isAdmin;
+      try {
+        await load();
+      } catch (e) {
+        console.error(e);
+        $("list").innerHTML = '<div class="empty">목록을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.</div>';
+      }
+      // 첫 접속 때 한 번만, 관리자가 아닐 때만 방문 수를 셉니다.
+      if (!counted) {
+        counted = true;
+        if (!isAdmin) countVisit();
+      }
+    });
+
+    async function load() {
+      const cfgSnap = await getDoc(doc(db, "meta", "config"));
+      const cfg = cfgSnap.exists() ? { ...DEFAULT_CONFIG, ...cfgSnap.data() } : DEFAULT_CONFIG;
+      categories = cfg.categories || [];
+      $("siteTitle").textContent = cfg.siteTitle;
+      $("siteDesc").textContent = cfg.siteDesc || "";
+      document.title = cfg.siteTitle;
+
+      const q = isAdmin
+        ? collection(db, "apps")
+        : query(collection(db, "apps"), where("hidden", "==", false));
+      const snap = await getDocs(q);
+      apps = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      render();
+    }
+
+    function render() {
+      const cats = orderedCats(categories, apps).filter((c) => apps.some((a) => catOf(a) === c));
+      if (activeCat !== "전체" && !cats.includes(activeCat)) activeCat = "전체";
+
+      $("tabs").innerHTML = ["전체", ...cats].map((c) => {
+        const n = c === "전체" ? apps.length : apps.filter((a) => catOf(a) === c).length;
+        return `<button class="tab${c === activeCat ? " on" : ""}" data-cat="${esc(c)}">${esc(c)}<span class="n">${n}</span></button>`;
+      }).join("");
+
+      const list = $("list");
+      if (!apps.length) {
+        list.innerHTML = '<div class="empty">아직 등록된 앱이 없어요.</div>';
+        return;
+      }
+
+      const kw = keyword.trim().toLowerCase();
+      if (activeCat === "전체" && !kw) {
+        list.innerHTML = cats.map((c) => {
+          const items = sortApps(apps.filter((a) => catOf(a) === c));
+          return `<h2 class="section-title">${esc(c)}<span class="n">${items.length}</span></h2>
+                  <div class="grid">${items.map(card).join("")}</div>`;
+        }).join("");
+        return;
+      }
+
+      const match = (a) => !kw || [a.title, a.desc, a.audience, a.category]
+        .some((v) => String(v || "").toLowerCase().includes(kw));
+      const items = sortApps(apps.filter((a) => (activeCat === "전체" || catOf(a) === activeCat) && match(a)));
+      list.innerHTML = items.length
+        ? `<div class="grid">${items.map(card).join("")}</div>`
+        : '<div class="empty">찾는 앱이 없어요.</div>';
+    }
+
+    function card(a) {
+      const badges = [
+        a.audience && `<span class="badge">${esc(a.audience)}</span>`,
+        isAdmin && a.hidden && `<span class="badge warn">숨김</span>`,
+        isAdmin && `<span class="badge gray">클릭 ${a.clicks || 0}</span>`
+      ].filter(Boolean).join("");
+      return `<a class="card${a.hidden ? " is-hidden" : ""}" href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener" data-id="${esc(a.id)}">
+        <h3>${esc(a.title)}</h3>
+        <p>${esc(a.desc || "")}</p>
+        ${badges ? `<div class="meta">${badges}</div>` : ""}
+      </a>`;
+    }
+
+    function countClick(e) {
+      const c = e.target.closest("a.card");
+      if (!c || isAdmin) return;
+      if (e.type === "auxclick" && e.button !== 1) return; // 휠 클릭(새 탭)만
+      updateDoc(doc(db, "apps", c.dataset.id), { clicks: increment(1) }).catch(() => {});
+    }
+
+    function countVisit() {
+      // 같은 창에서 새로고침한 것은 한 번만 셉니다.
+      try {
+        if (sessionStorage.getItem("hub_visited")) return;
+        sessionStorage.setItem("hub_visited", "1");
+      } catch (e) { /* 저장소를 못 쓰는 환경이면 그냥 셉니다 */ }
+      setDoc(doc(db, "stats", "site"), { visits: increment(1) }, { merge: true }).catch(() => {});
+      setDoc(doc(db, "daily", dateKey()), { visits: increment(1) }, { merge: true }).catch(() => {});
+    }
+
+    $("list").addEventListener("click", countClick);
+    $("list").addEventListener("auxclick", countClick);
+
+    $("tabs").addEventListener("click", (e) => {
+      const t = e.target.closest(".tab");
+      if (!t) return;
+      activeCat = t.dataset.cat;
+      render();
+    });
+
+    $("search").addEventListener("input", (e) => {
+      keyword = e.target.value;
+      render();
+    });
+  </script>
+</body>
+</html>

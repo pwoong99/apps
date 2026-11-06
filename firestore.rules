@@ -1,0 +1,48 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'pwoong99@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    // 페이지 제목·설명·분류 목록: 누구나 읽기, 관리자만 쓰기
+    match /meta/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 앱 목록: 숨긴 앱은 관리자만 읽기
+    // 일반 방문자는 공개 앱의 클릭 수를 1씩 올리는 것만 가능
+    match /apps/{appId} {
+      allow read: if isAdmin() || resource.data.hidden == false;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        resource.data.hidden == false
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['clicks'])
+        && request.resource.data.clicks == resource.data.get('clicks', 0) + 1
+      );
+    }
+
+    // 전체 방문 수: 누구나 1씩 올리기만 가능, 보기는 관리자만
+    match /stats/site {
+      allow read, delete: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['visits'])
+        && request.resource.data.visits == 1;
+      allow update: if request.resource.data.keys().hasOnly(['visits'])
+        && request.resource.data.visits == resource.data.visits + 1;
+    }
+
+    // 날짜별 방문 수 (문서 이름: 2026-11-05 형식)
+    match /daily/{day} {
+      allow read, delete: if isAdmin();
+      allow create: if day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && request.resource.data.keys().hasOnly(['visits'])
+        && request.resource.data.visits == 1;
+      allow update: if request.resource.data.keys().hasOnly(['visits'])
+        && request.resource.data.visits == resource.data.visits + 1;
+    }
+  }
+}
