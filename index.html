@@ -104,8 +104,10 @@
       if (activeCat === "전체" && !kw) {
         list.innerHTML = cats.map((c) => {
           const items = sortApps(apps.filter((a) => catOf(a) === c));
-          return `<h2 class="section-title">${esc(c)}<span class="n">${items.length}</span></h2>
-                  <div class="grid">${items.map(card).join("")}</div>`;
+          return `<section class="cat t${tintOf(c)}">
+                    <h2 class="section-title">${esc(c)}<span class="n">${items.length}</span></h2>
+                    <div class="grid">${items.map(card).join("")}</div>
+                  </section>`;
         }).join("");
         return;
       }
@@ -118,6 +120,12 @@
         : '<div class="empty">찾는 앱이 없어요.</div>';
     }
 
+    // 분류마다 정해진 색 (분류 순서대로 6가지 색을 돌려 씀)
+    function tintOf(c) {
+      const i = orderedCats(categories, apps).indexOf(c);
+      return (i < 0 ? 0 : i) % 6;
+    }
+
     function card(a) {
       const badges = [
         isRecent(a.updated) && `<span class="badge new">NEW</span>`,
@@ -125,7 +133,7 @@
         isAdmin && a.hidden && `<span class="badge warn">숨김</span>`,
         isAdmin && `<span class="badge gray">클릭 ${a.clicks || 0}</span>`
       ].filter(Boolean).join("");
-      return `<a class="card${a.hidden ? " is-hidden" : ""}" href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener" data-id="${esc(a.id)}">
+      return `<a class="card t${tintOf(catOf(a))}${a.hidden ? " is-hidden" : ""}${isRecent(a.updated) ? " has-new" : ""}" href="${esc(safeUrl(a.url))}" target="_blank" rel="noopener" data-id="${esc(a.id)}">
         <h3>${esc(a.title)}</h3>
         <p>${esc(a.desc || "")}</p>
         ${badges ? `<div class="meta">${badges}</div>` : ""}
