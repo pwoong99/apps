@@ -13,10 +13,10 @@
       <div class="logo">🍿</div>
       <div>
         <h1>신대 시네마 스낵바</h1>
-        <p>신대초등학교 워크숍 · 영화관 간식 주문</p>
+        <p>신대초 워크숍 · 영화관 간식 주문</p>
       </div>
       <div class="spacer"></div>
-      <button class="ghost-btn" id="replayIntro">안프로 안내</button>
+      <button class="ghost-btn" id="replayIntro">안내 보기</button>
     </div>
   </header>
 
@@ -205,7 +205,12 @@
         const b = document.createElement("button");
         b.className = "cat" + (c === cat ? " on" : "");
         b.textContent = c;
-        b.onclick = () => { cat = c; renderCats(); renderMenu(); };
+        b.onclick = () => {
+          cat = c; renderCats(); renderMenu();
+          // 메뉴를 내려 보던 중이면 고른 분류의 첫 메뉴가 바로 보이게
+          const top = $("#menu").getBoundingClientRect().top + window.scrollY - $("#cats").offsetHeight;
+          if (window.scrollY > top) window.scrollTo({ top, behavior: "smooth" });
+        };
         box.appendChild(b);
       });
     }
@@ -471,9 +476,8 @@
     // 안내 화면에서 쓰는 안프로 사진을 미리 불러 둡니다.
     ["img/anpro.png", "img/anpro_smile.png"].forEach((src) => { new Image().src = src; });
     renderPeople(); renderNames(); renderCats(); renderMenu(); renderBar();
-    let seen = false;
-    try { seen = localStorage.getItem("cgvOrder_introSeen") === "1"; } catch (e) {}
-    if (!seen) openIntro();
+    // 주소로 들어오면 항상 안프로 안내부터 (건너뛰기 가능)
+    openIntro();
   </script>
 </body>
 </html>
