@@ -443,10 +443,19 @@
       $("#introDots").innerHTML = SCRIPT.map((_, i) => `<i class="${i === step ? "on" : ""}"></i>`).join("");
       $("#introNext").textContent = step === SCRIPT.length - 1 ? "주문하러 가기" : "다음";
     }
-    function openIntro() { step = 0; renderIntro(); $("#intro").hidden = false; }
+    function openIntro() {
+      step = 0;
+      renderIntro();
+      $("#intro").hidden = false;
+      document.body.style.overflow = "hidden"; // 안내 중에는 뒤 화면이 움직이지 않게
+    }
     function closeIntro() {
       $("#intro").hidden = true;
+      document.body.style.overflow = "";
       try { localStorage.setItem("cgvOrder_introSeen", "1"); } catch (e) {}
+      // 안내가 끝나면 항상 주문하기 첫 부분(누가 주문하나요?)부터 보이게
+      show("order");
+      window.scrollTo(0, 0);
     }
     $("#introNext").onclick = (e) => {
       e.stopPropagation();
@@ -456,6 +465,11 @@
     $("#replayIntro").onclick = openIntro;
 
     // ---------- 시작 ----------
+    // 새로 고침해도 예전 스크롤 위치로 내려가지 않게
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    window.scrollTo(0, 0);
+    // 안내 화면에서 쓰는 안프로 사진을 미리 불러 둡니다.
+    ["img/anpro.png", "img/anpro_smile.png"].forEach((src) => { new Image().src = src; });
     renderPeople(); renderNames(); renderCats(); renderMenu(); renderBar();
     let seen = false;
     try { seen = localStorage.getItem("cgvOrder_introSeen") === "1"; } catch (e) {}
