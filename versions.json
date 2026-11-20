@@ -177,6 +177,36 @@
       "url": "https://script.google.com/macros/s/AKfycbx189uR2izoxxtK7XJCe5Jqh0Q-gvpVZJI8njdfCam3Y3SCB66MDR3t_LEn8Y0U7OMKiQ/exec",
       "version": "v1.0",
       "updated": ""
+    },
+    "eco-sea": {
+      "name": "함께 지키는 바다 (환경지킴이 해수면 게임)",
+      "url": "https://pwoong99.github.io/eco-sea/",
+      "version": "v1.6.0",
+      "updated": "2026-11-12"
+    },
+    "ocean-cleanup": {
+      "name": "푸른바다 구조대",
+      "url": "https://pwoong99.github.io/eco-sea/ocean/",
+      "version": "v2.1.0",
+      "updated": "2026-11-17"
+    },
+    "trade-game": {
+      "name": "어린이 대통령의 무역 교실",
+      "url": "https://pwoong99.github.io/trade-game/",
+      "version": "v1.90",
+      "updated": "2026-11-19"
+    },
+    "ai-math-tour": {
+      "name": "가족과 함께하는 AI수학투어",
+      "url": "https://pwoong99.github.io/ai-math-tour/",
+      "version": "v3.02",
+      "updated": "2026-11-19"
+    },
+    "stamp": {
+      "name": "도장콕",
+      "url": "https://pwoong99.github.io/stamp/",
+      "version": "v1.0",
+      "updated": "2026-11-10"
     }
   }
 }
