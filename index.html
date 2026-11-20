@@ -37,7 +37,8 @@
   <script type="module">
     import {
       db, auth, ADMIN_EMAIL, DEFAULT_CONFIG,
-      esc, safeUrl, dateKey, catOf, orderedCats, sortApps
+      esc, safeUrl, dateKey, catOf, orderedCats, sortApps,
+      loadVersions, applyVersions, versionLine, isRecent
     } from "./firebase.js";
     import {
       collection, query, where, getDocs, doc, getDoc, setDoc, updateDoc, increment
@@ -79,8 +80,8 @@
       const q = isAdmin
         ? collection(db, "apps")
         : query(collection(db, "apps"), where("hidden", "==", false));
-      const snap = await getDocs(q);
-      apps = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const [snap, versions] = await Promise.all([getDocs(q), loadVersions()]);
+      apps = applyVersions(snap.docs.map((d) => ({ id: d.id, ...d.data() })), versions);
       render();
     }
 
@@ -119,6 +120,7 @@
 
     function card(a) {
       const badges = [
+        isRecent(a.updated) && `<span class="badge new">NEW</span>`,
         a.audience && `<span class="badge">${esc(a.audience)}</span>`,
         isAdmin && a.hidden && `<span class="badge warn">숨김</span>`,
         isAdmin && `<span class="badge gray">클릭 ${a.clicks || 0}</span>`
@@ -127,6 +129,7 @@
         <h3>${esc(a.title)}</h3>
         <p>${esc(a.desc || "")}</p>
         ${badges ? `<div class="meta">${badges}</div>` : ""}
+        ${versionLine(a) ? `<div class="ver">${esc(versionLine(a))}</div>` : ""}
       </a>`;
     }
 

@@ -48,6 +48,11 @@
               <label>대상<input id="f_audience" list="audienceList" placeholder="예: 교사용"></label>
             </div>
             <label>설명 (한 줄)<input id="f_desc" placeholder="카드에 보일 짧은 설명"></label>
+            <div class="two">
+              <label>버전<input id="f_version" placeholder="예: v1.0"></label>
+              <label>업데이트 날짜<input id="f_updated" type="date"></label>
+            </div>
+            <p class="hint" id="f_versionHint" style="margin:0">Claude가 배포한 앱은 versions.json으로 자동 반영돼요. 여기 적은 값은 날짜가 더 최근일 때만 보여요.</p>
             <label class="check"><input type="checkbox" id="f_hidden"> 숨김 (로그인한 관리자에게만 보여요)</label>
             <div class="row gap">
               <button class="btn primary" type="submit" id="saveBtn">추가</button>
@@ -132,7 +137,8 @@
   <script type="module">
     import {
       db, auth, ADMIN_EMAIL, DEFAULT_CONFIG, UNCATEGORIZED,
-      esc, safeUrl, dateKey, catOf, orderedCats, sortApps
+      esc, safeUrl, dateKey, catOf, orderedCats, sortApps,
+      loadVersions, applyVersions, versionLine, isRecent
     } from "./firebase.js";
     import {
       collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc,
@@ -192,8 +198,8 @@
     }
 
     async function loadApps() {
-      const snap = await getDocs(collection(db, "apps"));
-      apps = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      const [snap, versions] = await Promise.all([getDocs(collection(db, "apps")), loadVersions()]);
+      apps = applyVersions(snap.docs.map((d) => ({ id: d.id, ...d.data() })), versions);
       renderApps();
       renderCats();
       fillCategorySelect();
@@ -234,7 +240,9 @@
     function startEdit(a) {
       $("f_id").value = a.id;
       $("f_title").value = a.title || "";
-      $("f_url").value = a.url || "";
+      $("f_url").value = a.rawUrl || a.url || "";
+      $("f_version").value = a.rawVersion || "";
+      $("f_updated").value = a.rawUpdated || "";
       fillCategorySelect();
       $("f_category").value = a.category || "";
       $("f_audience").value = a.audience || "";
@@ -256,6 +264,8 @@
         category: $("f_category").value,
         audience: val("f_audience"),
         desc: val("f_desc"),
+        version: val("f_version"),
+        updated: $("f_updated").value,
         hidden: $("f_hidden").checked
       };
       if (!/^https?:\/\//i.test(data.url)) return toast("링크는 https:// 로 시작해야 해요.");
@@ -346,9 +356,11 @@
                 <span class="meta">
                   ${a.audience ? `<span class="badge">${esc(a.audience)}</span>` : ""}
                   ${a.hidden ? `<span class="badge warn">숨김</span>` : ""}
+                  ${isRecent(a.updated) ? `<span class="badge new">NEW</span>` : ""}
                   <span class="badge gray">클릭 ${a.clicks || 0}</span>
                 </span>
                 <div class="sub">${esc(a.desc || a.url)}</div>
+                <div class="sub">${esc(versionLine(a) || "버전 정보 없음")}${a.versionKey ? ` · 자동 반영(${esc(a.versionKey)})` : " · 직접 입력"}</div>
               </div>
               <div class="aact">
                 <button class="btn small" data-act="up" ${i === 0 ? "disabled" : ""} title="위로">↑</button>

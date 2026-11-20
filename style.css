@@ -72,6 +72,8 @@ body {
 .badge { font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
 .badge.gray { background: #eef0f3; color: var(--muted); }
 .badge.warn { background: var(--danger-soft); color: var(--danger); }
+.badge.new { background: #fff3d6; color: #b26a00; font-weight: 600; }
+.ver { font-size: 12px; color: #9aa1af; font-variant-numeric: tabular-nums; }
 
 .empty {
   padding: 44px 20px; text-align: center; color: var(--muted);

@@ -59,6 +59,71 @@ export function orderedCats(categories, apps) {
   return list;
 }
 
+// ---------- 버전·업데이트 날짜 (versions.json) ----------
+// 다른 채팅에서 앱을 배포할 때 Claude가 versions.json을 고쳐 올립니다.
+export async function loadVersions() {
+  try {
+    const res = await fetch("versions.json", { cache: "no-cache" });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Object.entries(data.apps || {}).map(([key, v]) => ({ key, ...v }));
+  } catch (e) {
+    return [];
+  }
+}
+
+const normUrl = (u) => String(u || "").trim().replace(/\/+$/, "").toLowerCase();
+
+export function fmtVersion(v) {
+  const s = String(v || "").trim();
+  if (!s) return "";
+  return /^v/i.test(s) ? "v" + s.slice(1) : "v" + s;
+}
+
+// 앱 목록에 버전 정보를 붙입니다.
+// - versions.json에서 url(또는 oldUrls)이 같은 항목을 찾습니다.
+// - 관리자 화면에서 직접 적은 값(version·updated)과 비교해 날짜가 더 최근인 쪽을 씁니다.
+// - versions.json의 url이 다르면 링크도 그 주소로 바꿉니다(앱 주소가 옮겨진 경우).
+export function applyVersions(apps, entries) {
+  return apps.map((a) => {
+    const e = entries.find((x) =>
+      [x.url, ...(x.oldUrls || [])].some((u) => u && normUrl(u) === normUrl(a.url)));
+    let version = a.version || "";
+    let updated = a.updated || "";
+    let url = a.url;
+    if (e) {
+      if (e.url) url = e.url;
+      const fileWins = !version || !updated || (e.updated || "") >= updated;
+      if (fileWins) {
+        version = e.version || version;
+        updated = e.updated || updated;
+      }
+    }
+    return {
+      ...a,
+      rawUrl: a.url, rawVersion: a.version || "", rawUpdated: a.updated || "",
+      url, version: fmtVersion(version), updated,
+      versionKey: e ? e.key : ""
+    };
+  });
+}
+
+// 2026-11-20 → 11월 20일
+export function fmtDate(d) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(d || "");
+  return m ? `${Number(m[2])}월 ${Number(m[3])}일` : "";
+}
+
+// 최근 7일 안에 업데이트된 앱
+export function isRecent(d) {
+  return !!d && d >= dateKey(7) && d <= dateKey(0);
+}
+
+export function versionLine(a) {
+  const parts = [a.version, a.updated && `${fmtDate(a.updated)} 업데이트`].filter(Boolean);
+  return parts.join(" · ");
+}
+
 export function sortApps(list) {
   return [...list].sort((a, b) =>
     (a.order ?? 0) - (b.order ?? 0) || String(a.title).localeCompare(String(b.title), "ko"));
