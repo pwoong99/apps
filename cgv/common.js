@@ -7,17 +7,16 @@ export {
   query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-export const APP_VERSION = "v1.0";
+export const APP_VERSION = "v1.01";
 export const LIMIT_PER_PERSON = 10000; // 한 사람당 한도
 export const MAX_PEOPLE = 3;           // 함께 주문할 수 있는 최대 인원
 export const COL_ORDERS = "cgvOrder_orders";
 export const COL_META = "cgvOrder_meta";
 
-// 관리자 2명: 이름과 비밀번호(SHA-256 값)
+// 관리자 계정: 이름과 비밀번호(SHA-256 값)
 // 비밀번호를 바꿀 때는 Claude에게 말하면 이 값을 바꿔 올려 줍니다.
 export const ADMINS = [
-  { name: "관리자1", hash: "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" }, // 1234
-  { name: "관리자2", hash: "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" }  // 1234
+  { name: "관리자", hash: "03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4" }
 ];
 
 export const CATEGORIES = ["세트", "팝콘", "음료", "커피·티", "주류", "스낵"];
