@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>관리자 · 신대 시네마 스낵바</title>
+  <meta name="robots" content="noindex">
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <div class="logo">🎟️</div>
+      <div>
+        <h1>스낵바 관리자</h1>
+        <p id="who">신대초등학교 워크숍 · 영화관 간식 주문</p>
+      </div>
+      <div class="spacer"></div>
+      <a class="ghost-btn" href="index.html" style="text-decoration:none">주문 화면</a>
+      <button class="ghost-btn" id="logout" hidden>나가기</button>
+    </div>
+  </header>
+
+  <div class="wrap" style="padding-bottom:40px">
+    <!-- 로그인 -->
+    <section id="loginView" class="panel login">
+      <h2>관리자 로그인</h2>
+      <p class="hint">등록된 관리자 2명만 들어올 수 있어요.</p>
+      <form id="loginForm">
+        <input class="input" id="adminName" placeholder="관리자 이름" autocomplete="username">
+        <input class="input" id="adminPw" type="password" placeholder="비밀번호" autocomplete="current-password">
+        <button class="btn" type="submit">들어가기</button>
+      </form>
+    </section>
+
+    <section id="adminView" hidden>
+      <div class="tabs">
+        <button class="tab on" data-view="summary">전체 요약</button>
+        <button class="tab" data-view="orders">주문별 내역</button>
+        <button class="tab" data-view="settings">설정</button>
+      </div>
+
+      <!-- 요약 + 저장 -->
+      <div id="view-summary">
+        <div class="toolbar">
+          <span class="grow hint" style="margin:0;color:var(--sub);font-size:13px">아래 내용이 그대로 저장돼요.</span>
+          <button class="btn small dark" id="savePng">사진으로 저장</button>
+          <button class="btn small" id="savePdf">PDF로 저장</button>
+        </div>
+        <div class="report" id="report"></div>
+      </div>
+
+      <!-- 주문별 -->
+      <div id="view-orders" hidden>
+        <div class="toolbar">
+          <input class="input grow" id="search" placeholder="이름으로 찾기" style="max-width:280px">
+          <span class="hint" id="orderCount" style="margin:0;color:var(--sub);font-size:13px"></span>
+        </div>
+        <div class="panel" style="padding:0;overflow:auto">
+          <table class="tbl" id="orderTable"></table>
+        </div>
+      </div>
+
+      <!-- 설정 -->
+      <div id="view-settings" hidden>
+        <div class="panel">
+          <h2>주문 받기</h2>
+          <p class="hint">끄면 새 주문과 주문 취소가 막혀요. 주문 확인은 계속 할 수 있어요.</p>
+          <label class="switch"><span id="openLabel">주문 받는 중</span><input type="checkbox" id="openToggle"></label>
+        </div>
+        <div class="panel">
+          <h2>판매 중지 메뉴</h2>
+          <p class="hint">체크한 메뉴는 주문 화면에서 보이지 않아요. (현장 품절 등)</p>
+          <div id="hideList"></div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot"><span>만든이 푸르이든 · <span id="ver"></span></span></footer>
+  </div>
+
+  <script type="module">
+    import {
+      db, collection, doc, deleteDoc, setDoc, onSnapshot,
+      APP_VERSION, LIMIT_PER_PERSON, COL_ORDERS, COL_META, ADMINS, CATEGORIES, MENU,
+      won, normName, esc, itemLabel, orderCode, fmtTime, sha256, toast
+    } from "./common.js";
+
+    const $ = (s) => document.querySelector(s);
+    $("#ver").textContent = APP_VERSION;
+
+    let orders = [];
+    let settings = { open: true, hidden: [] };
+    let started = false;
+
+    // ---------- 로그인 ----------
+    async function tryLogin(name, pw) {
+      const n = normName(name);
+      const a = ADMINS.find((x) => normName(x.name) === n);
+      if (!a) return false;
+      return (await sha256(pw)) === a.hash ? a.name : false;
+    }
+    $("#loginForm").onsubmit = async (e) => {
+      e.preventDefault();
+      const ok = await tryLogin($("#adminName").value, $("#adminPw").value);
+      if (!ok) return toast("이름이나 비밀번호가 맞지 않아요");
+      sessionStorage.setItem("cgvOrder_admin", ok);
+      enter(ok);
+    };
+    $("#logout").onclick = () => { sessionStorage.removeItem("cgvOrder_admin"); location.reload(); };
+
+    function enter(name) {
+      $("#loginView").hidden = true;
+      $("#adminView").hidden = false;
+      $("#logout").hidden = false;
+      $("#who").textContent = `${name} 관리자님`;
+      if (started) return;
+      started = true;
+      onSnapshot(collection(db, COL_ORDERS), (snap) => {
+        orders = [];
+        snap.forEach((d) => orders.push({ id: d.id, ...d.data() }));
+        orders.sort((a, b) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0));
+        renderAll();
+      }, (err) => { console.error(err); toast("주문을 불러오지 못했어요"); });
+      onSnapshot(doc(db, COL_META, "settings"), (snap) => {
+        const d = snap.exists() ? snap.data() : {};
+        settings = { open: d.open !== false, hidden: d.hidden || [] };
+        renderSettings();
+      });
+    }
+    const saved = sessionStorage.getItem("cgvOrder_admin");
+    if (saved && ADMINS.some((a) => a.name === saved)) enter(saved);
+
+    // ---------- 탭 ----------
+    document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => {
+      document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("on", x === t));
+      ["summary", "orders", "settings"].forEach((v) => { $("#view-" + v).hidden = v !== t.dataset.view; });
+    }));
+
+    // ---------- 집계 ----------
+    function aggregate() {
+      const map = new Map();
+      orders.forEach((o) => (o.items || []).forEach((it) => {
+        const key = `${it.id}|${it.option || ""}`;
+        const cur = map.get(key) || { ...it, qty: 0, amount: 0 };
+        cur.qty += it.qty;
+        cur.amount += it.price * it.qty;
+        map.set(key, cur);
+      }));
+      const rows = [...map.values()];
+      const idx = (id) => { const i = MENU.findIndex((m) => m.id === id); return i < 0 ? 999 : i; };
+      rows.sort((a, b) => idx(a.id) - idx(b.id) || (a.option || "").localeCompare(b.option || "", "ko"));
+      return rows;
+    }
+
+    function renderAll() { renderReport(); renderOrders(); }
+
+    function renderReport() {
+      const rows = aggregate();
+      const total = orders.reduce((s, o) => s + (o.total || 0), 0);
+      const peopleCnt = orders.reduce((s, o) => s + (o.names || []).length, 0);
+      const budget = peopleCnt * LIMIT_PER_PERSON;
+      const qtyAll = rows.reduce((s, r) => s + r.qty, 0);
+      const now = new Date();
+      const stamp = `${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} 기준`;
+
+      // 메뉴별 (분류 묶음)
+      let menuRows = "";
+      CATEGORIES.forEach((c) => {
+        const inCat = rows.filter((r) => (MENU.find((m) => m.id === r.id)?.cat || "기타") === c);
+        if (!inCat.length) return;
+        menuRows += `<tr class="cat-row"><td colspan="4">${esc(c)}</td></tr>`;
+        menuRows += inCat.map((r) => `<tr><td>${esc(itemLabel(r))}</td><td class="num">${won(r.price)}</td>
+          <td class="num"><b>${r.qty}</b>개</td><td class="num">${won(r.amount)}</td></tr>`).join("");
+      });
+      const etc = rows.filter((r) => !MENU.some((m) => m.id === r.id));
+      menuRows += etc.map((r) => `<tr><td>${esc(itemLabel(r))}</td><td class="num">${won(r.price)}</td>
+        <td class="num"><b>${r.qty}</b>개</td><td class="num">${won(r.amount)}</td></tr>`).join("");
+
+      // 주문별
+      const orderRows = orders.map((o, i) => `<tr>
+        <td class="num">${i + 1}</td>
+        <td class="names-cell">${(o.names || []).map(esc).join(", ")}${o.memo ? `<div class="small">💬 ${esc(o.memo)}</div>` : ""}</td>
+        <td>${(o.items || []).map((it) => `${esc(itemLabel(it))} ${it.qty}`).join(", ")}</td>
+        <td class="num">${won(o.total)}</td></tr>`).join("");
+
+      $("#report").innerHTML = `
+        <h2>🍿 신대 시네마 스낵바 주문 내역</h2>
+        <div class="rsub">신대초등학교 워크숍 · ${stamp}</div>
+        <div class="stats">
+          <div class="stat red"><div class="k">총 금액</div><div class="v">${won(total)}</div><div class="s">한도 ${won(budget)}</div></div>
+          <div class="stat"><div class="k">주문한 사람</div><div class="v">${peopleCnt}명</div><div class="s">주문 ${orders.length}건</div></div>
+          <div class="stat"><div class="k">메뉴 수량</div><div class="v">${qtyAll}개</div><div class="s">${rows.length}종류</div></div>
+          <div class="stat"><div class="k">1인 평균</div><div class="v">${won(peopleCnt ? Math.round(total / peopleCnt) : 0)}</div><div class="s">남은 한도 ${won(budget - total)}</div></div>
+        </div>
+        <h3>메뉴별 합계 (준비할 것)</h3>
+        ${rows.length ? `<table class="tbl">
+          <thead><tr><th>메뉴</th><th class="num">가격</th><th class="num">수량</th><th class="num">금액</th></tr></thead>
+          <tbody>${menuRows}</tbody>
+          <tfoot><tr><td>합계</td><td></td><td class="num">${qtyAll}개</td><td class="num">${won(total)}</td></tr></tfoot>
+        </table>` : `<p class="hint">아직 주문이 없어요.</p>`}
+        <h3>누가 무엇을 주문했나</h3>
+        ${orders.length ? `<table class="tbl">
+          <thead><tr><th class="num">#</th><th>이름</th><th>메뉴</th><th class="num">금액</th></tr></thead>
+          <tbody>${orderRows}</tbody>
+          <tfoot><tr><td></td><td>${peopleCnt}명</td><td></td><td class="num">${won(total)}</td></tr></tfoot>
+        </table>` : `<p class="hint">아직 주문이 없어요.</p>`}`;
+    }
+
+    function renderOrders() {
+      const q = normName($("#search").value);
+      const list = orders.filter((o) => !q || (o.names || []).some((n) => n.includes(q)));
+      $("#orderCount").textContent = `${list.length}건`;
+      $("#orderTable").innerHTML = list.length ? `
+        <thead><tr><th>번호</th><th>이름</th><th>메뉴</th><th class="num">금액</th><th>시간</th><th></th></tr></thead>
+        <tbody>${list.map((o) => {
+          const lim = (o.names || []).length * LIMIT_PER_PERSON;
+          return `<tr>
+            <td class="small">${orderCode(o.id)}</td>
+            <td class="names-cell">${(o.names || []).map(esc).join("<br>")}</td>
+            <td>${(o.items || []).map((it) => `${esc(itemLabel(it))} × ${it.qty}`).join("<br>")}
+              ${o.memo ? `<div class="small">💬 ${esc(o.memo)}</div>` : ""}</td>
+            <td class="num">${won(o.total)}<div class="small">/ ${won(lim)}</div></td>
+            <td class="small">${fmtTime(o.createdAt)}</td>
+            <td><button class="del" data-del="${o.id}">삭제</button></td>
+          </tr>`;
+        }).join("")}</tbody>` : `<tbody><tr><td style="padding:20px">주문이 없어요.</td></tr></tbody>`;
+    }
+    $("#search").oninput = renderOrders;
+    $("#orderTable").addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-del]");
+      if (!b) return;
+      const o = orders.find((x) => x.id === b.dataset.del);
+      if (!confirm(`${(o.names || []).join(", ")} 주문을 삭제할까요?`)) return;
+      try { await deleteDoc(doc(db, COL_ORDERS, o.id)); toast("삭제했어요"); }
+      catch (err) { alert("삭제하지 못했어요."); }
+    });
+
+    // ---------- 설정 ----------
+    function renderSettings() {
+      $("#openToggle").checked = settings.open;
+      $("#openLabel").textContent = settings.open ? "주문 받는 중" : "주문 마감됨";
+      $("#hideList").innerHTML = MENU.map((m) => `<label class="switch">
+        <span>${esc(m.name)} <span class="small" style="color:var(--sub)">${won(m.price)}</span></span>
+        <input type="checkbox" data-hide="${m.id}" ${settings.hidden.includes(m.id) ? "checked" : ""}></label>`).join("");
+    }
+    async function saveSettings(patch) {
+      try {
+        await setDoc(doc(db, COL_META, "settings"), { open: settings.open, hidden: settings.hidden, ...patch });
+        toast("저장했어요");
+      } catch (err) { console.error(err); alert("저장하지 못했어요."); renderSettings(); }
+    }
+    $("#openToggle").onchange = (e) => saveSettings({ open: e.target.checked });
+    $("#hideList").addEventListener("change", (e) => {
+      const id = e.target.dataset.hide;
+      if (!id) return;
+      const hidden = new Set(settings.hidden);
+      e.target.checked ? hidden.add(id) : hidden.delete(id);
+      saveSettings({ hidden: [...hidden] });
+    });
+
+    // ---------- 저장 (사진·PDF) ----------
+    function fileStamp() {
+      const d = new Date(Date.now() + 9 * 3600e3).toISOString();
+      return d.slice(0, 10) + "_" + d.slice(11, 16).replace(":", "");
+    }
+    async function capture() {
+      renderReport(); // 저장 시각을 새로 고칩니다.
+      document.body.classList.add("saving");
+      try {
+        return await html2canvas($("#report"), { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+      } finally {
+        document.body.classList.remove("saving");
+      }
+    }
+    $("#savePng").onclick = async () => {
+      const canvas = await capture();
+      const a = document.createElement("a");
+      a.download = `스낵바_주문내역_${fileStamp()}.png`;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+    };
+    $("#savePdf").onclick = async () => {
+      const canvas = await capture();
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+      const margin = 10;
+      const pageW = 210 - margin * 2;
+      const pageH = 297 - margin * 2;
+      const pxPerMm = canvas.width / pageW;
+      const sliceH = Math.floor(pageH * pxPerMm);
+      for (let y = 0, page = 0; y < canvas.height; y += sliceH, page++) {
+        const h = Math.min(sliceH, canvas.height - y);
+        const part = document.createElement("canvas");
+        part.width = canvas.width;
+        part.height = h;
+        part.getContext("2d").drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h);
+        if (page) pdf.addPage();
+        pdf.addImage(part.toDataURL("image/jpeg", 0.92), "JPEG", margin, margin, pageW, h / pxPerMm);
+      }
+      pdf.save(`스낵바_주문내역_${fileStamp()}.pdf`);
+    };
+  </script>
+</body>
+</html>

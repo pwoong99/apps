@@ -44,5 +44,36 @@ service cloud.firestore {
       allow update: if request.resource.data.keys().hasOnly(['visits'])
         && request.resource.data.visits == resource.data.visits + 1;
     }
+
+    // ===== 신대 시네마 스낵바 (cgv/) — 워크숍 간식 주문 =====
+    // 주문: 누구나 보기·주문·취소, 고치기는 안 됨 (한 사람당 1만 원, 최대 3명)
+    match /cgvOrder_orders/{orderId} {
+      allow read, delete: if true;
+      allow update: if false;
+      allow create: if request.resource.data.keys().hasOnly(['names', 'people', 'items', 'total', 'memo', 'createdAt'])
+        && request.resource.data.names is list
+        && request.resource.data.names.size() >= 1
+        && request.resource.data.names.size() <= 3
+        && request.resource.data.people == request.resource.data.names.size()
+        && request.resource.data.items is list
+        && request.resource.data.items.size() >= 1
+        && request.resource.data.items.size() <= 40
+        && request.resource.data.total is int
+        && request.resource.data.total > 0
+        && request.resource.data.total <= request.resource.data.people * 10000
+        && request.resource.data.memo is string
+        && request.resource.data.memo.size() <= 100
+        && request.resource.data.createdAt == request.time
+        && (!exists(/databases/$(database)/documents/cgvOrder_meta/settings)
+            || get(/databases/$(database)/documents/cgvOrder_meta/settings).data.open != false);
+    }
+    // 설정: 주문 마감 여부, 판매 중지 메뉴
+    match /cgvOrder_meta/{docId} {
+      allow read: if true;
+      allow write: if docId == 'settings'
+        && request.resource.data.keys().hasOnly(['open', 'hidden'])
+        && request.resource.data.open is bool
+        && request.resource.data.hidden is list;
+    }
   }
 }

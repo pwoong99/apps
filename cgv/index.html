@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>신대 시네마 스낵바 · 신대초 워크숍</title>
+  <meta name="theme-color" content="#141414">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="top-inner">
+      <div class="logo">🍿</div>
+      <div>
+        <h1>신대 시네마 스낵바</h1>
+        <p>신대초등학교 워크숍 · 영화관 간식 주문</p>
+      </div>
+      <div class="spacer"></div>
+      <button class="ghost-btn" id="replayIntro">안프로 안내</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="tabs">
+      <button class="tab on" data-view="order">주문하기</button>
+      <button class="tab" data-view="mine">내 주문 확인</button>
+    </div>
+
+    <div id="closedNotice" class="notice" hidden>
+      지금은 주문을 받지 않고 있어요. 이미 한 주문은 ‘내 주문 확인’에서 볼 수 있어요.
+    </div>
+
+    <!-- 주문하기 -->
+    <section id="view-order">
+      <div class="panel">
+        <h2>누가 주문하나요?</h2>
+        <p class="hint">한 사람당 1만 원까지예요. 함께 주문하면 인원수만큼 한도가 늘어나요.</p>
+        <div class="people" id="people"></div>
+        <div class="names" id="names"></div>
+      </div>
+
+      <div class="cats" id="cats"></div>
+      <div class="menu-grid" id="menu"></div>
+    </section>
+
+    <!-- 주문 완료 -->
+    <section id="view-done" hidden>
+      <div class="panel done">
+        <div class="big">🎬</div>
+        <h2>주문이 들어갔어요!</h2>
+        <p>‘내 주문 확인’에서 이름으로 언제든 다시 볼 수 있어요.</p>
+        <div id="doneTicket"></div>
+        <button class="btn dark" id="goMine">내 주문 확인하기</button>
+      </div>
+    </section>
+
+    <!-- 내 주문 확인 -->
+    <section id="view-mine" hidden>
+      <div class="panel">
+        <h2>내 주문 확인</h2>
+        <p class="hint">주문할 때 적은 이름을 넣어 주세요. 함께 주문한 경우 누구 이름으로 찾아도 나와요.</p>
+        <form class="lookup" id="lookupForm">
+          <input class="input" id="lookupName" placeholder="이름" autocomplete="name">
+          <button class="btn small dark" type="submit">확인</button>
+        </form>
+      </div>
+      <div id="mineResult"></div>
+    </section>
+
+    <footer class="foot">
+      <span>만든이 푸르이든 · <span id="ver"></span></span>
+      <a href="admin.html">관리자</a>
+    </footer>
+  </div>
+
+  <!-- 아래 고정 합계 바 -->
+  <div class="cartbar" id="cartbar">
+    <div class="cartbar-inner">
+      <div class="sum">
+        <div class="line1"><b id="sumTotal">0원</b> / <span id="sumLimit">10,000원</span></div>
+        <div class="meter" id="meter"><i></i></div>
+        <div class="left" id="sumLeft"></div>
+      </div>
+      <button class="btn" id="submitBtn" disabled>주문하기</button>
+    </div>
+  </div>
+
+  <!-- 주문 확인 창 -->
+  <div class="modal" id="confirmModal" hidden>
+    <div class="sheet">
+      <h3>이대로 주문할까요?</h3>
+      <div id="confirmTicket"></div>
+      <p class="hint" style="margin:14px 0 6px;font-size:13px;color:var(--sub)">전달할 말 (선택) — 예: 팝콘 반반, 얼음 적게</p>
+      <textarea class="input" id="memo" rows="2" maxlength="100"></textarea>
+      <div class="actions">
+        <button class="btn light" id="cancelConfirm">다시 고르기</button>
+        <button class="btn" id="doOrder">주문 확정</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 안프로 안내 -->
+  <div class="intro" id="intro" hidden>
+    <button class="skip" id="skipIntro">건너뛰기</button>
+    <div class="stage">
+      <div class="char" id="charBox"></div>
+      <div class="bubble">
+        <div class="speaker">안프로</div>
+        <div class="text" id="introText"></div>
+        <div id="introExtra"></div>
+        <div class="nav">
+          <div class="dots" id="introDots"></div>
+          <button class="btn small" id="introNext">다음</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import {
+      db, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, query, where, serverTimestamp,
+      APP_VERSION, LIMIT_PER_PERSON, MAX_PEOPLE, COL_ORDERS, COL_META, CATEGORIES, MENU,
+      won, normName, esc, itemLabel, orderCode, fmtTime, toast, anproFallback
+    } from "./common.js";
+
+    const $ = (s) => document.querySelector(s);
+    $("#ver").textContent = APP_VERSION;
+
+    // ---------- 상태 ----------
+    let people = 1;
+    let names = [""];
+    let cat = "전체";
+    const cart = new Map();          // "id|옵션" → 수량
+    let settings = { open: true, hidden: [] };
+    let busy = false;
+
+    const limit = () => people * LIMIT_PER_PERSON;
+    const keyOf = (id, opt) => `${id}|${opt || ""}`;
+    const visibleMenu = () => MENU.filter((m) => !(settings.hidden || []).includes(m.id));
+
+    function cartItems() {
+      const list = [];
+      cart.forEach((qty, key) => {
+        const [id, option] = key.split("|");
+        const m = MENU.find((x) => x.id === id);
+        if (m && qty > 0) list.push({ id, name: m.name, option: option || "", price: m.price, qty });
+      });
+      // 메뉴판 순서대로
+      return list.sort((a, b) => MENU.findIndex((m) => m.id === a.id) - MENU.findIndex((m) => m.id === b.id)
+        || a.option.localeCompare(b.option, "ko"));
+    }
+    const cartTotal = () => cartItems().reduce((s, it) => s + it.price * it.qty, 0);
+
+    // ---------- 설정(주문 마감, 판매 중지 메뉴) ----------
+    onSnapshot(doc(db, COL_META, "settings"), (snap) => {
+      const d = snap.exists() ? snap.data() : {};
+      settings = { open: d.open !== false, hidden: d.hidden || [] };
+      // 판매 중지된 메뉴는 장바구니에서 뺍니다.
+      [...cart.keys()].forEach((k) => { if (settings.hidden.includes(k.split("|")[0])) cart.delete(k); });
+      $("#closedNotice").hidden = settings.open;
+      renderCats(); renderMenu(); renderBar();
+    }, () => {});
+
+    // ---------- 인원·이름 ----------
+    function renderPeople() {
+      const box = $("#people");
+      box.innerHTML = "";
+      for (let n = 1; n <= MAX_PEOPLE; n++) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = n === people ? "on" : "";
+        b.innerHTML = `${n === 1 ? "혼자" : n + "명이 함께"}<small>${won(n * LIMIT_PER_PERSON)}까지</small>`;
+        b.onclick = () => {
+          people = n;
+          names = Array.from({ length: n }, (_, i) => names[i] || "");
+          renderPeople(); renderNames(); renderMenu(); renderBar();
+        };
+        box.appendChild(b);
+      }
+    }
+    function renderNames() {
+      const box = $("#names");
+      box.innerHTML = "";
+      names.forEach((v, i) => {
+        const label = document.createElement("label");
+        label.innerHTML = `<span>${people === 1 ? "이름" : (i + 1) + "번째"}</span>`;
+        const input = document.createElement("input");
+        input.className = "input";
+        input.placeholder = people === 1 ? "내 이름" : (i === 0 ? "내 이름" : "함께하는 분 이름");
+        input.maxLength = 10;
+        input.value = v;
+        input.oninput = () => { names[i] = input.value; renderBar(); };
+        label.appendChild(input);
+        box.appendChild(label);
+      });
+    }
+
+    // ---------- 메뉴 ----------
+    function renderCats() {
+      const box = $("#cats");
+      const used = CATEGORIES.filter((c) => visibleMenu().some((m) => m.cat === c));
+      if (cat !== "전체" && !used.includes(cat)) cat = "전체";
+      box.innerHTML = "";
+      ["전체", ...used].forEach((c) => {
+        const b = document.createElement("button");
+        b.className = "cat" + (c === cat ? " on" : "");
+        b.textContent = c;
+        b.onclick = () => { cat = c; renderCats(); renderMenu(); };
+        box.appendChild(b);
+      });
+    }
+
+    function renderMenu() {
+      const box = $("#menu");
+      const left = limit() - cartTotal();
+      const list = visibleMenu().filter((m) => cat === "전체" || m.cat === cat);
+      box.innerHTML = list.map((m) => {
+        const opts = m.options || [""];
+        const picked = opts.some((o) => (cart.get(keyOf(m.id, o)) || 0) > 0);
+        const rows = opts.map((o) => {
+          const q = cart.get(keyOf(m.id, o)) || 0;
+          return `<div class="qty-row">
+            <span class="opt">${o ? esc(o) : ""}</span>
+            <div class="qty ${q ? "has" : ""}">
+              <button data-act="minus" data-id="${m.id}" data-opt="${esc(o)}" ${q ? "" : "disabled"} aria-label="빼기">−</button>
+              <b>${q}</b>
+              <button data-act="plus" data-id="${m.id}" data-opt="${esc(o)}" class="${m.price > left ? "over" : ""}" ${settings.open ? "" : "disabled"} aria-label="더하기">+</button>
+            </div>
+          </div>`;
+        }).join("");
+        return `<div class="item ${picked ? "picked" : ""}">
+          <div class="pic"><img src="img/menu/${m.id}.png" alt="${esc(m.name)}" loading="lazy"></div>
+          <div class="body">
+            <div class="name">${esc(m.name)}</div>
+            <div class="desc">${esc(m.desc)}</div>
+            <div class="price">${won(m.price)}</div>
+            ${rows}
+          </div>
+        </div>`;
+      }).join("") || `<div class="panel">이 분류에는 지금 고를 수 있는 메뉴가 없어요.</div>`;
+    }
+
+    $("#menu").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-act]");
+      if (!b) return;
+      const m = MENU.find((x) => x.id === b.dataset.id);
+      const key = keyOf(m.id, b.dataset.opt);
+      const q = cart.get(key) || 0;
+      if (b.dataset.act === "plus") {
+        if (cartTotal() + m.price > limit()) {
+          toast(`한도 ${won(limit())}를 넘어요`);
+          $("#cartbar").classList.remove("shake"); void $("#cartbar").offsetWidth; $("#cartbar").classList.add("shake");
+          return;
+        }
+        cart.set(key, q + 1);
+      } else {
+        if (q <= 1) cart.delete(key); else cart.set(key, q - 1);
+      }
+      renderMenu(); renderBar();
+    });
+
+    // 사진이 없으면 그림 자리를 비워 둡니다.
+    $("#menu").addEventListener("error", (e) => {
+      if (e.target.tagName === "IMG") e.target.style.visibility = "hidden";
+    }, true);
+
+    // ---------- 합계 바 ----------
+    function renderBar() {
+      const total = cartTotal();
+      const lim = limit();
+      const over = total > lim;
+      $("#sumTotal").textContent = won(total);
+      $("#sumLimit").textContent = won(lim);
+      $("#sumLeft").textContent = over ? `${won(total - lim)} 초과` : `남은 금액 ${won(lim - total)}`;
+      $("#meter i").style.width = Math.min(100, (total / lim) * 100) + "%";
+      $("#meter").classList.toggle("full", over || total === lim);
+      $("#submitBtn").disabled = !total || over || !settings.open;
+      $("#submitBtn").textContent = !settings.open ? "주문 마감" : "주문하기";
+    }
+
+    // ---------- 주문 ----------
+    function ticketHtml(o, { showCode = true } = {}) {
+      const lim = (o.people || o.names.length) * LIMIT_PER_PERSON;
+      return `<div class="ticket">
+        ${showCode && o.id ? `<span class="code">No. ${orderCode(o.id)}</span>` : ""}
+        <div class="who">${o.names.map(esc).join(" · ")}</div>
+        <div class="meta">${o.names.length > 1 ? `${o.names.length}명 함께 주문` : "개인 주문"}${o.createdAt ? " · " + fmtTime(o.createdAt) : ""}</div>
+        <ul>${o.items.map((it) => `<li><span>${esc(itemLabel(it))} × ${it.qty}</span><span>${won(it.price * it.qty)}</span></li>`).join("")}</ul>
+        <div class="total"><span>합계</span><span>${won(o.total)}</span></div>
+        <div class="limit">한도 ${won(lim)} · 남은 금액 ${won(lim - o.total)}</div>
+        ${o.memo ? `<div class="memo">💬 ${esc(o.memo)}</div>` : ""}
+      </div>`;
+    }
+
+    function readNames() {
+      const list = names.map(normName);
+      if (list.some((n) => !n)) return { error: people === 1 ? "이름을 적어 주세요." : "함께 주문하는 분 이름을 모두 적어 주세요." };
+      if (new Set(list).size !== list.length) return { error: "같은 이름이 두 번 들어갔어요." };
+      return { list };
+    }
+
+    $("#submitBtn").onclick = () => {
+      const r = readNames();
+      if (r.error) {
+        toast(r.error);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return;
+      }
+      const items = cartItems();
+      $("#confirmTicket").innerHTML = ticketHtml({ names: r.list, people, items, total: cartTotal() });
+      $("#confirmModal").hidden = false;
+    };
+    $("#cancelConfirm").onclick = () => { $("#confirmModal").hidden = true; };
+
+    $("#doOrder").onclick = async () => {
+      if (busy) return;
+      const r = readNames();
+      if (r.error) return toast(r.error);
+      const items = cartItems();
+      const total = cartTotal();
+      if (!items.length || total > limit()) return;
+      busy = true;
+      $("#doOrder").disabled = true;
+      $("#doOrder").textContent = "주문 중…";
+      try {
+        // 이미 주문한 사람이 있는지 확인 (한 사람은 한 번만)
+        const snap = await getDocs(query(collection(db, COL_ORDERS), where("names", "array-contains-any", r.list)));
+        if (!snap.empty) {
+          const already = new Set();
+          snap.forEach((d) => (d.data().names || []).forEach((n) => r.list.includes(n) && already.add(n)));
+          $("#confirmModal").hidden = true;
+          alert(`${[...already].join(", ")} 선생님은 이미 주문했어요.\n바꾸려면 ‘내 주문 확인’에서 취소한 뒤 다시 주문해 주세요.`);
+          return;
+        }
+        const data = {
+          names: r.list,
+          people,
+          items: items.map(({ id, name, option, price, qty }) => ({ id, name, option, price, qty })),
+          total,
+          memo: $("#memo").value.trim().slice(0, 100),
+          createdAt: serverTimestamp()
+        };
+        const ref = await addDoc(collection(db, COL_ORDERS), data);
+        $("#confirmModal").hidden = true;
+        $("#doneTicket").innerHTML = ticketHtml({ ...data, id: ref.id, createdAt: new Date() });
+        lastName = r.list[0];
+        cart.clear();
+        $("#memo").value = "";
+        names = Array.from({ length: people }, () => "");
+        renderNames(); renderMenu(); renderBar();
+        show("done");
+      } catch (e) {
+        console.error(e);
+        alert(settings.open ? "주문을 저장하지 못했어요. 잠시 뒤 다시 해 주세요." : "주문이 마감되었어요.");
+      } finally {
+        busy = false;
+        $("#doOrder").disabled = false;
+        $("#doOrder").textContent = "주문 확정";
+      }
+    };
+
+    // ---------- 내 주문 확인 ----------
+    let lastName = "";
+    async function lookup(name) {
+      const n = normName(name);
+      const box = $("#mineResult");
+      if (!n) return toast("이름을 적어 주세요.");
+      box.innerHTML = `<div class="panel">찾는 중…</div>`;
+      try {
+        const snap = await getDocs(query(collection(db, COL_ORDERS), where("names", "array-contains", n)));
+        const list = [];
+        snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+        if (!list.length) {
+          box.innerHTML = `<div class="panel"><b>${esc(n)}</b> 이름으로 된 주문이 없어요.<br><span style="color:var(--sub);font-size:13px">주문할 때 적은 이름과 똑같은지 확인해 주세요.</span></div>`;
+          return;
+        }
+        box.innerHTML = list.map((o) => `${ticketHtml(o)}
+          ${settings.open ? `<div class="ticket-actions"><button class="btn small line" data-cancel="${o.id}">주문 취소</button></div>` : ""}`).join("");
+      } catch (e) {
+        console.error(e);
+        box.innerHTML = `<div class="panel">주문을 불러오지 못했어요. 잠시 뒤 다시 해 주세요.</div>`;
+      }
+    }
+    $("#lookupForm").onsubmit = (e) => { e.preventDefault(); lookup($("#lookupName").value); };
+    $("#mineResult").addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-cancel]");
+      if (!b) return;
+      if (!confirm("이 주문을 취소할까요?\n함께 주문한 분들의 주문도 같이 취소돼요.")) return;
+      try {
+        await deleteDoc(doc(db, COL_ORDERS, b.dataset.cancel));
+        toast("주문을 취소했어요");
+        lookup($("#lookupName").value);
+      } catch (err) {
+        alert("취소하지 못했어요. 잠시 뒤 다시 해 주세요.");
+      }
+    });
+
+    // ---------- 화면 전환 ----------
+    function show(view) {
+      ["order", "done", "mine"].forEach((v) => { $("#view-" + v).hidden = v !== view; });
+      document.querySelectorAll(".tab").forEach((t) =>
+        t.classList.toggle("on", t.dataset.view === (view === "done" ? "order" : view)));
+      $("#cartbar").hidden = view !== "order";
+      window.scrollTo({ top: 0 });
+    }
+    document.querySelectorAll(".tab").forEach((t) => (t.onclick = () => show(t.dataset.view)));
+    $("#goMine").onclick = () => {
+      show("mine");
+      $("#lookupName").value = lastName;
+      lookup(lastName);
+    };
+
+    // ---------- 안프로 안내 ----------
+    const SCRIPT = [
+      { face: "smile", text: "어서 오세요! 🍿\n<b>신대 시네마</b>에 오신 선생님들, 환영합니다.\n오늘 간식을 맡은 <b>안프로</b>예요." },
+      { face: "", text: "이번 워크숍을 준비하면서 생각했어요.\n뭐라도 선생님들께 해 드려야\n스트레스도 풀고, 학교생활이 즐거울 것 같아서…" },
+      { face: "shy", text: "저도 모르게 그만…\n<b>판을 키우고 있어요</b> ㅋㅋㅋ" },
+      { face: "smile", text: "그래서 영화 보며 드실 간식을\n미리 골라 주시면, 한꺼번에 준비해 둘게요!\n주문 방법, 아주 간단해요." },
+      { face: "", text: "약속은 딱 하나!\n<b>한 사람당 1만 원까지</b> 고를 수 있어요.",
+        extra: `<div class="rule-card"><div><b>1명</b>1만 원까지</div><div><b>2명</b>2만 원까지</div><div><b>3명</b>3만 원까지</div></div>` },
+      { face: "", text: "혼자 고르기 아쉬우면 같이 주문하세요.\n<b>2명이면 2만 원, 3명이면 3만 원</b>까지!\n이때는 함께하는 분 이름을 <b>모두</b> 적어 주세요." },
+      { face: "", text: "회원가입은 없어요. <b>이름이 곧 계정</b>이에요.\n‘내 주문 확인’에서 같은 이름을 넣으면\n내가 주문한 걸 다시 볼 수 있어요." },
+      { face: "", text: "주문은 <b>한 사람당 한 번</b>이에요.\n바꾸고 싶으면 ‘내 주문 확인’에서\n취소한 뒤 다시 주문하면 돼요." },
+      { face: "smile", text: "그럼, 맛있는 영화 시간 되세요! 🎬" }
+    ];
+    let step = 0;
+    function charImg(face) {
+      const img = document.createElement("img");
+      img.alt = "안프로";
+      img.src = face ? `img/anpro_${face}.png` : "img/anpro.png";
+      img.onerror = () => {
+        if (face && !img.dataset.fb) { img.dataset.fb = 1; img.src = "img/anpro.png"; }
+        else anproFallback(img);
+      };
+      return img;
+    }
+    function renderIntro() {
+      const s = SCRIPT[step];
+      const box = $("#charBox");
+      box.innerHTML = "";
+      box.appendChild(charImg(s.face));
+      $("#introText").innerHTML = s.text;
+      $("#introExtra").innerHTML = s.extra || "";
+      $("#introDots").innerHTML = SCRIPT.map((_, i) => `<i class="${i === step ? "on" : ""}"></i>`).join("");
+      $("#introNext").textContent = step === SCRIPT.length - 1 ? "주문하러 가기" : "다음";
+    }
+    function openIntro() { step = 0; renderIntro(); $("#intro").hidden = false; }
+    function closeIntro() {
+      $("#intro").hidden = true;
+      try { localStorage.setItem("cgvOrder_introSeen", "1"); } catch (e) {}
+    }
+    $("#introNext").onclick = (e) => {
+      e.stopPropagation();
+      if (step < SCRIPT.length - 1) { step++; renderIntro(); } else closeIntro();
+    };
+    $("#skipIntro").onclick = closeIntro;
+    $("#replayIntro").onclick = openIntro;
+
+    // ---------- 시작 ----------
+    renderPeople(); renderNames(); renderCats(); renderMenu(); renderBar();
+    let seen = false;
+    try { seen = localStorage.getItem("cgvOrder_introSeen") === "1"; } catch (e) {}
+    if (!seen) openIntro();
+  </script>
+</body>
+</html>
