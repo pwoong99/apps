@@ -208,10 +208,13 @@
       "version": "v1.03",
       "updated": "2026-11-20"
     },
-    "fence": {
-      "name": "울타리치기",
-      "url": "https://pwoong99.github.io/fence/",
-      "version": "v1.3",
+    "angels-plan": {
+      "name": "엔젤스 플랜",
+      "url": "https://pwoong99.github.io/angels-plan/",
+      "oldUrls": [
+        "https://pwoong99.github.io/fence/"
+      ],
+      "version": "v1.0",
       "updated": "2026-11-22"
     }
   }
