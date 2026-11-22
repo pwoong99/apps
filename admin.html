@@ -167,6 +167,9 @@
     $("logoutBtn").addEventListener("click", () => signOut(auth));
 
     onAuthStateChanged(auth, async (user) => {
+      // 같은 주소(pwoong99.github.io)에서 같은 Firebase를 쓰는 다른 앱(울타리치기·AI수학투어 등)의
+      // 익명 로그인이 여기에도 보일 수 있어요. 익명 로그인은 로그아웃시키지 않고 '로그인 전'으로 봅니다.
+      if (user && user.isAnonymous) user = null;
       if (user && user.email !== ADMIN_EMAIL) {
         const email = user.email;
         await signOut(auth);
