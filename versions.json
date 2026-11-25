@@ -216,6 +216,12 @@
       ],
       "version": "v3.0",
       "updated": "2026-11-24"
+    },
+    "find-my-planet": {
+      "name": "내 행성을 찾아라!",
+      "url": "https://pwoong99.github.io/class-games/find-my-planet/",
+      "version": "v1.0",
+      "updated": "2026-11-25"
     }
   }
 }
