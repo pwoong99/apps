@@ -178,7 +178,6 @@
       const rows = aggregate();
       const total = orders.reduce((s, o) => s + (o.total || 0), 0);
       const peopleCnt = orders.reduce((s, o) => s + (o.names || []).length, 0);
-      const budget = peopleCnt * LIMIT_PER_PERSON;
       const qtyAll = rows.reduce((s, r) => s + r.qty, 0);
       const now = new Date();
       const stamp = `${now.getFullYear()}. ${now.getMonth() + 1}. ${now.getDate()}. ${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")} 기준`;
@@ -207,10 +206,10 @@
         <h2>🍿 신대 시네마 스낵바 주문 내역</h2>
         <div class="rsub">신대초등학교 워크숍 · ${stamp}</div>
         <div class="stats">
-          <div class="stat red"><div class="k">총 금액</div><div class="v">${won(total)}</div><div class="s">한도 ${won(budget)}</div></div>
+          <div class="stat red"><div class="k">총 금액</div><div class="v">${won(total)}</div><div class="s">주문 ${orders.length}건 · ${peopleCnt}명</div></div>
           <div class="stat"><div class="k">주문한 사람</div><div class="v">${peopleCnt}명</div><div class="s">주문 ${orders.length}건</div></div>
           <div class="stat"><div class="k">메뉴 수량</div><div class="v">${qtyAll}개</div><div class="s">${rows.length}종류</div></div>
-          <div class="stat"><div class="k">1인 평균</div><div class="v">${won(peopleCnt ? Math.round(total / peopleCnt) : 0)}</div><div class="s">남은 한도 ${won(budget - total)}</div></div>
+          <div class="stat"><div class="k">1인 평균</div><div class="v">${won(peopleCnt ? Math.round(total / peopleCnt) : 0)}</div><div class="s">주문한 사람 기준</div></div>
         </div>
         <h3>메뉴별 합계 (준비할 것)</h3>
         ${rows.length ? `<table class="tbl">
