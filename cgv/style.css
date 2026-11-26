@@ -345,3 +345,8 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .report .stats { margin-bottom: 0; }
 .report .stat { border: 1px solid var(--line); }
 .saving .report { width: 800px; }
+
+/* 정렬 버튼 (가나다순 / 주문순) */
+.seg { display: inline-flex; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 3px; flex: none; }
+.seg button { border: 0; background: transparent; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--sub); }
+.seg button.on { background: var(--ink); color: #fff; }

@@ -45,6 +45,7 @@
       <!-- 요약 + 저장 -->
       <div id="view-summary">
         <div class="toolbar">
+          <div class="seg" role="group" aria-label="정렬"><button type="button" data-sort="name" class="on">가나다순</button><button type="button" data-sort="time">주문순</button></div>
           <span class="grow hint" style="margin:0;color:var(--sub);font-size:13px">아래 내용이 그대로 저장돼요.</span>
           <button class="btn small dark" id="savePng">사진으로 저장</button>
           <button class="btn small" id="savePdf">PDF로 저장</button>
@@ -56,6 +57,7 @@
       <div id="view-orders" hidden>
         <div class="toolbar">
           <input class="input grow" id="search" placeholder="이름으로 찾기" style="max-width:280px">
+          <div class="seg" role="group" aria-label="정렬"><button type="button" data-sort="name" class="on">가나다순</button><button type="button" data-sort="time">주문순</button></div>
           <span class="hint" id="orderCount" style="margin:0;color:var(--sub);font-size:13px"></span>
         </div>
         <div class="panel" style="padding:0;overflow:auto">
@@ -94,6 +96,21 @@
     let orders = [];
     let settings = { open: true, hidden: [] };
     let started = false;
+    let sortMode = "name"; // 기본: 가나다순 ("time" = 주문순)
+
+    // ---------- 정렬 ----------
+    const ko = (a, b) => a.localeCompare(b, "ko");
+    const shownNames = (o) => sortMode === "name" ? [...(o.names || [])].sort(ko) : (o.names || []);
+    function sortedOrders() {
+      const list = [...orders]; // 기본은 주문한 시각 순서
+      if (sortMode === "name") list.sort((a, b) => ko(shownNames(a)[0] || "", shownNames(b)[0] || ""));
+      return list;
+    }
+    document.querySelectorAll("[data-sort]").forEach((b) => (b.onclick = () => {
+      sortMode = b.dataset.sort;
+      document.querySelectorAll("[data-sort]").forEach((x) => x.classList.toggle("on", x.dataset.sort === sortMode));
+      renderAll();
+    }));
 
     // ---------- 로그인 ----------
     async function tryLogin(name, pw) {
@@ -180,9 +197,9 @@
         <td class="num"><b>${r.qty}</b>개</td><td class="num">${won(r.amount)}</td></tr>`).join("");
 
       // 주문별
-      const orderRows = orders.map((o, i) => `<tr>
+      const orderRows = sortedOrders().map((o, i) => `<tr>
         <td class="num">${i + 1}</td>
-        <td class="names-cell">${(o.names || []).map(esc).join(", ")}${o.memo ? `<div class="small">💬 ${esc(o.memo)}</div>` : ""}</td>
+        <td class="names-cell">${shownNames(o).map(esc).join(", ")}${o.memo ? `<div class="small">💬 ${esc(o.memo)}</div>` : ""}</td>
         <td>${(o.items || []).map((it) => `${esc(itemLabel(it))} ${it.qty}`).join(", ")}</td>
         <td class="num">${won(o.total)}</td></tr>`).join("");
 
@@ -201,7 +218,7 @@
           <tbody>${menuRows}</tbody>
           <tfoot><tr><td>합계</td><td></td><td class="num">${qtyAll}개</td><td class="num">${won(total)}</td></tr></tfoot>
         </table>` : `<p class="hint">아직 주문이 없어요.</p>`}
-        <h3>누가 무엇을 주문했나</h3>
+        <h3>누가 무엇을 주문했나 <span style="font-weight:500;color:var(--sub);font-size:13px">(${sortMode === "name" ? "가나다순" : "주문순"})</span></h3>
         ${orders.length ? `<table class="tbl">
           <thead><tr><th class="num">#</th><th>이름</th><th>메뉴</th><th class="num">금액</th></tr></thead>
           <tbody>${orderRows}</tbody>
@@ -211,7 +228,7 @@
 
     function renderOrders() {
       const q = normName($("#search").value);
-      const list = orders.filter((o) => !q || (o.names || []).some((n) => n.includes(q)));
+      const list = sortedOrders().filter((o) => !q || (o.names || []).some((n) => n.includes(q)));
       $("#orderCount").textContent = `${list.length}건`;
       $("#orderTable").innerHTML = list.length ? `
         <thead><tr><th>번호</th><th>이름</th><th>메뉴</th><th class="num">금액</th><th>시간</th><th></th></tr></thead>
@@ -219,7 +236,7 @@
           const lim = (o.names || []).length * LIMIT_PER_PERSON;
           return `<tr>
             <td class="small">${orderCode(o.id)}</td>
-            <td class="names-cell">${(o.names || []).map(esc).join("<br>")}</td>
+            <td class="names-cell">${shownNames(o).map(esc).join("<br>")}</td>
             <td>${(o.items || []).map((it) => `${esc(itemLabel(it))} × ${it.qty}`).join("<br>")}
               ${o.memo ? `<div class="small">💬 ${esc(o.memo)}</div>` : ""}</td>
             <td class="num">${won(o.total)}<div class="small">/ ${won(lim)}</div></td>

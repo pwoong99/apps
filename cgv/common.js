@@ -7,7 +7,7 @@ export {
   query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-export const APP_VERSION = "v1.03";
+export const APP_VERSION = "v1.04";
 export const LIMIT_PER_PERSON = 10000; // 한 사람당 한도
 export const MAX_PEOPLE = 3;           // 함께 주문할 수 있는 최대 인원
 export const COL_ORDERS = "cgvOrder_orders";
