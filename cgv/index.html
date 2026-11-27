@@ -90,7 +90,7 @@
     <div class="sheet">
       <h3>이대로 주문할까요?</h3>
       <div id="confirmTicket"></div>
-      <p class="hint" style="margin:14px 0 6px;font-size:13px;color:var(--sub)">전달할 말 (선택) — 예: 팝콘 반반, 얼음 적게</p>
+      <p class="hint" id="memoHint" style="margin:14px 0 6px;font-size:13px;color:var(--sub)">전달할 말 (선택) — 예: 얼음 적게</p>
       <textarea class="input" id="memo" rows="2" maxlength="100"></textarea>
       <div class="actions">
         <button class="btn light" id="cancelConfirm">다시 고르기</button>
@@ -121,7 +121,7 @@
       db, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, query, where, serverTimestamp,
       APP_VERSION, LIMIT_PER_PERSON, MAX_PEOPLE, COL_ORDERS, COL_META, CATEGORIES, MENU,
       won, normName, esc, itemLabel, orderCode, fmtTime, toast, anproFallback,
-      popcornUp, orderFinal, POPCORN_UPCHARGE
+      popcornUp, orderFinal, POPCORN_UPCHARGE, POPCORN_IDS
     } from "./common.js";
 
     const $ = (s) => document.querySelector(s);
@@ -132,6 +132,7 @@
     let names = [""];
     let cat = "전체";
     const cart = new Map();          // "id|옵션" → 수량
+    const ups = new Map();           // 팝콘 메뉴 id → 맛 변경 개수 (+1,000원씩)
     let settings = { open: true, hidden: [] };
     let busy = false;
 
@@ -150,7 +151,12 @@
       return list.sort((a, b) => MENU.findIndex((m) => m.id === a.id) - MENU.findIndex((m) => m.id === b.id)
         || a.option.localeCompare(b.option, "ko"));
     }
-    const cartTotal = () => cartItems().reduce((s, it) => s + it.price * it.qty, 0);
+    const menuTotal = () => cartItems().reduce((s, it) => s + it.price * it.qty, 0);
+    const qtyOf = (id) => cart.get(keyOf(id, "")) || 0;
+    const upOf = (id) => Math.min(ups.get(id) || 0, qtyOf(id));
+    const cartUp = () => POPCORN_IDS.reduce((s, id) => s + upOf(id), 0);
+    // 합계 = 메뉴 금액 + 팝콘 맛 변경 추가금 (1인 한도 안에서)
+    const cartTotal = () => menuTotal() + cartUp() * POPCORN_UPCHARGE;
 
     // ---------- 설정(주문 마감, 판매 중지 메뉴) ----------
     onSnapshot(doc(db, COL_META, "settings"), (snap) => {
@@ -158,6 +164,7 @@
       settings = { open: d.open !== false, hidden: d.hidden || [] };
       // 판매 중지된 메뉴는 장바구니에서 뺍니다.
       [...cart.keys()].forEach((k) => { if (settings.hidden.includes(k.split("|")[0])) cart.delete(k); });
+      [...ups.keys()].forEach((id) => { if (!qtyOf(id)) ups.delete(id); });
       $("#closedNotice").hidden = settings.open;
       renderCats(); renderMenu(); renderBar();
     }, () => {});
@@ -233,7 +240,7 @@
               <button data-act="plus" data-id="${m.id}" data-opt="${esc(o)}" class="${m.price > left ? "over" : ""}" ${settings.open ? "" : "disabled"} aria-label="더하기">+</button>
             </div>
           </div>`;
-        }).join("");
+        }).join("") + flavorRow(m, left);
         return `<div class="item ${picked ? "picked" : ""}">
           <div class="pic"><img src="img/menu/${m.id}.png" alt="${esc(m.name)}" loading="lazy"></div>
           <div class="body">
@@ -246,7 +253,49 @@
       }).join("") || `<div class="panel">이 분류에는 지금 고를 수 있는 메뉴가 없어요.</div>`;
     }
 
+    // 팝콘이 들어간 메뉴: 고르면 '맛 변경(+1,000원)'을 체크할 수 있어요
+    function flavorRow(m, left) {
+      const q = qtyOf(m.id);
+      if (!POPCORN_IDS.includes(m.id) || !q) return "";
+      const u = upOf(m.id);
+      const tight = POPCORN_UPCHARGE > left;
+      if (q === 1) {
+        return `<label class="flavor ${u ? "on" : ""}"><input type="checkbox" data-up="${m.id}" ${u ? "checked" : ""}>
+          <span>팝콘 맛 변경<small>+${won(POPCORN_UPCHARGE)}</small></span></label>`;
+      }
+      return `<div class="flavor ${u ? "on" : ""}"><span>맛 변경<small>개당 +${won(POPCORN_UPCHARGE)}</small></span>
+        <div class="qty ${u ? "has" : ""}">
+          <button data-upact="minus" data-id="${m.id}" ${u ? "" : "disabled"} aria-label="맛 변경 빼기">−</button>
+          <b>${u}</b>
+          <button data-upact="plus" data-id="${m.id}" class="${tight || u >= q ? "over" : ""}" aria-label="맛 변경 더하기">+</button>
+        </div></div>`;
+    }
+    function bump() {
+      toast(`한도 ${won(limit())}를 넘어요`);
+      $("#cartbar").classList.remove("shake"); void $("#cartbar").offsetWidth; $("#cartbar").classList.add("shake");
+    }
+    $("#menu").addEventListener("change", (e) => {
+      const id = e.target.dataset.up;
+      if (!id) return;
+      if (e.target.checked) {
+        if (cartTotal() + POPCORN_UPCHARGE > limit()) { e.target.checked = false; return bump(); }
+        ups.set(id, 1);
+      } else ups.delete(id);
+      renderMenu(); renderBar();
+    });
     $("#menu").addEventListener("click", (e) => {
+      const ub = e.target.closest("button[data-upact]");
+      if (ub) {
+        const id = ub.dataset.id;
+        const u = upOf(id);
+        if (ub.dataset.upact === "plus") {
+          if (u >= qtyOf(id)) return toast(`이 메뉴의 팝콘은 ${qtyOf(id)}개예요`);
+          if (cartTotal() + POPCORN_UPCHARGE > limit()) return bump();
+          ups.set(id, u + 1);
+        } else ups.set(id, Math.max(0, u - 1));
+        renderMenu(); renderBar();
+        return;
+      }
       const b = e.target.closest("button[data-act]");
       if (!b) return;
       const m = MENU.find((x) => x.id === b.dataset.id);
@@ -261,6 +310,7 @@
         cart.set(key, q + 1);
       } else {
         if (q <= 1) cart.delete(key); else cart.set(key, q - 1);
+        if (ups.has(m.id)) ups.set(m.id, upOf(m.id)); // 수량이 줄면 맛 변경 개수도 맞춰 줄임
       }
       renderMenu(); renderBar();
     });
@@ -314,7 +364,11 @@
         return;
       }
       const items = cartItems();
-      $("#confirmTicket").innerHTML = ticketHtml({ names: r.list, people, items, total: cartTotal() });
+      $("#confirmTicket").innerHTML = ticketHtml({ names: r.list, people, items, total: menuTotal(), popcornUp: cartUp() });
+      $("#memoHint").innerHTML = cartUp()
+        ? `<b style="color:var(--red-dark)">바꿀 팝콘 맛을 꼭 적어 주세요</b> — 예: 달콤으로, 반반`
+        : "전달할 말 (선택) — 예: 얼음 적게";
+      $("#memo").placeholder = cartUp() ? "바꿀 팝콘 맛" : "";
       $("#confirmModal").hidden = false;
     };
     $("#cancelConfirm").onclick = () => { $("#confirmModal").hidden = true; };
@@ -324,8 +378,14 @@
       const r = readNames();
       if (r.error) return toast(r.error);
       const items = cartItems();
-      const total = cartTotal();
-      if (!items.length || total > limit()) return;
+      const total = menuTotal();
+      const up = cartUp();
+      if (!items.length || cartTotal() > limit()) return;
+      if (up && !$("#memo").value.trim()) {
+        toast("바꿀 팝콘 맛을 적어 주세요");
+        $("#memo").focus();
+        return;
+      }
       busy = true;
       $("#doOrder").disabled = true;
       $("#doOrder").textContent = "주문 중…";
@@ -344,6 +404,7 @@
           people,
           items: items.map(({ id, name, option, price, qty }) => ({ id, name, option, price, qty })),
           total,
+          popcornUp: up,
           memo: $("#memo").value.trim().slice(0, 100),
           createdAt: serverTimestamp()
         };
@@ -352,6 +413,7 @@
         $("#doneTicket").innerHTML = ticketHtml({ ...data, id: ref.id, createdAt: new Date() });
         lastName = r.list[0];
         cart.clear();
+        ups.clear();
         $("#memo").value = "";
         names = Array.from({ length: people }, () => "");
         renderNames(); renderMenu(); renderBar();

@@ -57,7 +57,7 @@ service cloud.firestore {
         && request.resource.data.popcornUp is int
         && request.resource.data.popcornUp >= 0
         && request.resource.data.popcornUp <= 40;
-      allow create: if request.resource.data.keys().hasOnly(['names', 'people', 'items', 'total', 'memo', 'createdAt'])
+      allow create: if request.resource.data.keys().hasOnly(['names', 'people', 'items', 'total', 'popcornUp', 'memo', 'createdAt'])
         && request.resource.data.names is list
         && request.resource.data.names.size() >= 1
         && request.resource.data.names.size() <= 3
@@ -67,7 +67,10 @@ service cloud.firestore {
         && request.resource.data.items.size() <= 40
         && request.resource.data.total is int
         && request.resource.data.total > 0
-        && request.resource.data.total <= request.resource.data.people * 10000
+        && request.resource.data.get('popcornUp', 0) is int
+        && request.resource.data.get('popcornUp', 0) >= 0
+        && request.resource.data.get('popcornUp', 0) <= 40
+        && request.resource.data.total + request.resource.data.get('popcornUp', 0) * 1000 <= request.resource.data.people * 10000
         && request.resource.data.memo is string
         && request.resource.data.memo.size() <= 100
         && request.resource.data.createdAt == request.time

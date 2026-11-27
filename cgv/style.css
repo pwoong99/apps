@@ -358,3 +358,15 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .pop-ctl input { width: 20px; height: 20px; accent-color: var(--red); }
 .pop-ctl .qty button { width: 30px; height: 28px; font-size: 16px; }
 .tbl td.pop { white-space: nowrap; }
+
+/* 주문할 때 팝콘 맛 변경 선택 */
+.flavor {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  margin-top: 8px; padding: 7px 9px; border-radius: 10px; background: #fff8e6;
+  border: 1px solid #ffe3a3; font-size: 13px; font-weight: 600; color: #7a5600; cursor: pointer;
+}
+.flavor.on { background: #fff4f3; border-color: #ffd6d2; color: var(--red-dark); }
+.flavor small { display: block; font-size: 11px; font-weight: 500; opacity: .8; }
+.flavor input { width: 20px; height: 20px; accent-color: var(--red); flex: none; order: 2; }
+.flavor .qty { background: #fff; }
+.flavor .qty button { width: 32px; height: 30px; font-size: 17px; }
