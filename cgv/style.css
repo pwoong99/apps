@@ -370,3 +370,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .flavor input { width: 20px; height: 20px; accent-color: var(--red); flex: none; order: 2; }
 .flavor .qty { background: #fff; }
 .flavor .qty button { width: 32px; height: 30px; font-size: 17px; }
+
+/* 주문 확인 창: 팝콘 맛 변경 다시 확인 */
+.flavor-check { margin-top: 12px; padding: 12px; border-radius: 14px; background: #fffbf0; border: 1px solid #ffe3a3; }
+.fc-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+.fc-title small { font-weight: 500; color: var(--sub); font-size: 12px; margin-left: 4px; }
+.fc-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 8px; font-size: 14px; }
+.fc-row > span { flex: 1; min-width: 0; }
+.fc-row .flavor { margin-top: 0; flex: none; }

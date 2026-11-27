@@ -90,6 +90,7 @@
     <div class="sheet">
       <h3>이대로 주문할까요?</h3>
       <div id="confirmTicket"></div>
+      <div id="confirmFlavor"></div>
       <p class="hint" id="memoHint" style="margin:14px 0 6px;font-size:13px;color:var(--sub)">전달할 말 (선택) — 예: 얼음 적게</p>
       <textarea class="input" id="memo" rows="2" maxlength="100"></textarea>
       <div class="actions">
@@ -274,28 +275,38 @@
       toast(`한도 ${won(limit())}를 넘어요`);
       $("#cartbar").classList.remove("shake"); void $("#cartbar").offsetWidth; $("#cartbar").classList.add("shake");
     }
-    $("#menu").addEventListener("change", (e) => {
+    // 맛 변경 바꾸기 (메뉴 화면과 주문 확인 창 어디서 바꿔도 똑같이 반영)
+    function afterUpChange() {
+      renderMenu(); renderBar();
+      if (!$("#confirmModal").hidden) renderConfirm();
+    }
+    function onUpChange(e) {
       const id = e.target.dataset.up;
       if (!id) return;
       if (e.target.checked) {
         if (cartTotal() + POPCORN_UPCHARGE > limit()) { e.target.checked = false; return bump(); }
         ups.set(id, 1);
       } else ups.delete(id);
-      renderMenu(); renderBar();
-    });
-    $("#menu").addEventListener("click", (e) => {
+      afterUpChange();
+    }
+    function onUpClick(e) {
       const ub = e.target.closest("button[data-upact]");
-      if (ub) {
-        const id = ub.dataset.id;
-        const u = upOf(id);
-        if (ub.dataset.upact === "plus") {
-          if (u >= qtyOf(id)) return toast(`이 메뉴의 팝콘은 ${qtyOf(id)}개예요`);
-          if (cartTotal() + POPCORN_UPCHARGE > limit()) return bump();
-          ups.set(id, u + 1);
-        } else ups.set(id, Math.max(0, u - 1));
-        renderMenu(); renderBar();
-        return;
-      }
+      if (!ub) return false;
+      const id = ub.dataset.id;
+      const u = upOf(id);
+      if (ub.dataset.upact === "plus") {
+        if (u >= qtyOf(id)) { toast(`이 메뉴의 팝콘은 ${qtyOf(id)}개예요`); return true; }
+        if (cartTotal() + POPCORN_UPCHARGE > limit()) { bump(); return true; }
+        ups.set(id, u + 1);
+      } else ups.set(id, Math.max(0, u - 1));
+      afterUpChange();
+      return true;
+    }
+    $("#menu").addEventListener("change", onUpChange);
+    $("#confirmFlavor").addEventListener("change", onUpChange);
+    $("#confirmFlavor").addEventListener("click", onUpClick);
+    $("#menu").addEventListener("click", (e) => {
+      if (onUpClick(e)) return;
       const b = e.target.closest("button[data-act]");
       if (!b) return;
       const m = MENU.find((x) => x.id === b.dataset.id);
@@ -363,14 +374,27 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
         return;
       }
-      const items = cartItems();
-      $("#confirmTicket").innerHTML = ticketHtml({ names: r.list, people, items, total: menuTotal(), popcornUp: cartUp() });
+      confirmNames = r.list;
+      renderConfirm();
+      $("#confirmModal").hidden = false;
+    };
+    let confirmNames = [];
+    function renderConfirm() {
+      $("#confirmTicket").innerHTML = ticketHtml({ names: confirmNames, people, items: cartItems(), total: menuTotal(), popcornUp: cartUp() });
+      // 팝콘이 들어 있으면 맛 변경을 한 번 더 확인
+      const pops = POPCORN_IDS.filter((id) => qtyOf(id) > 0 && visibleMenu().some((m) => m.id === id));
+      $("#confirmFlavor").innerHTML = pops.length ? `<div class="flavor-check">
+          <div class="fc-title">🍿 팝콘 맛을 바꾸시나요? <small>개당 +${won(POPCORN_UPCHARGE)}</small></div>
+          ${pops.map((id) => {
+            const m = MENU.find((x) => x.id === id);
+            return `<div class="fc-row"><span>${esc(m.name)} × ${qtyOf(id)}</span>${flavorRow(m, limit() - cartTotal())}</div>`;
+          }).join("")}
+        </div>` : "";
       $("#memoHint").innerHTML = cartUp()
         ? `<b style="color:var(--red-dark)">바꿀 팝콘 맛을 꼭 적어 주세요</b> — 예: 달콤으로, 반반`
         : "전달할 말 (선택) — 예: 얼음 적게";
       $("#memo").placeholder = cartUp() ? "바꿀 팝콘 맛" : "";
-      $("#confirmModal").hidden = false;
-    };
+    }
     $("#cancelConfirm").onclick = () => { $("#confirmModal").hidden = true; };
 
     $("#doOrder").onclick = async () => {
