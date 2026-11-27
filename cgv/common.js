@@ -3,11 +3,11 @@
 import { db } from "../firebase.js";
 export { db };
 export {
-  collection, doc, addDoc, getDocs, deleteDoc, setDoc, onSnapshot,
+  collection, doc, addDoc, getDocs, deleteDoc, setDoc, updateDoc, onSnapshot,
   query, where, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-export const APP_VERSION = "v1.05";
+export const APP_VERSION = "v1.1";
 export const LIMIT_PER_PERSON = 10000; // 한 사람당 한도
 export const MAX_PEOPLE = 3;           // 함께 주문할 수 있는 최대 인원
 export const COL_ORDERS = "cgvOrder_orders";
@@ -44,6 +44,15 @@ export const MENU = [
 ];
 
 export const menuById = (id) => MENU.find((m) => m.id === id);
+
+// 팝콘 맛 변경 추가금: 관리자가 주문별 내역에서 체크하면 팝콘 1개당 1,000원이 붙습니다.
+export const POPCORN_IDS = ["single-set", "small-set", "popcorn-l", "popcorn-m"];
+export const POPCORN_UPCHARGE = 1000;
+export const popcornCount = (o) => (o.items || [])
+  .filter((it) => POPCORN_IDS.includes(it.id)).reduce((s, it) => s + (it.qty || 0), 0);
+export const popcornUp = (o) => Math.max(0, Math.min(Number(o.popcornUp) || 0, popcornCount(o)));
+export const orderExtra = (o) => popcornUp(o) * POPCORN_UPCHARGE;
+export const orderFinal = (o) => (o.total || 0) + orderExtra(o);
 
 export const won = (n) => Number(n || 0).toLocaleString("ko-KR") + "원";
 

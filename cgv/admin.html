@@ -85,9 +85,10 @@
 
   <script type="module">
     import {
-      db, collection, doc, deleteDoc, setDoc, onSnapshot,
+      db, collection, doc, deleteDoc, setDoc, updateDoc, onSnapshot,
       APP_VERSION, LIMIT_PER_PERSON, COL_ORDERS, COL_META, ADMINS, CATEGORIES, MENU,
-      won, normName, esc, itemLabel, orderCode, fmtTime, sha256, toast
+      won, normName, esc, itemLabel, orderCode, fmtTime, sha256, toast,
+      POPCORN_UPCHARGE, popcornCount, popcornUp, orderExtra, orderFinal
     } from "./common.js";
 
     const $ = (s) => document.querySelector(s);
@@ -176,7 +177,8 @@
 
     function renderReport() {
       const rows = aggregate();
-      const total = orders.reduce((s, o) => s + (o.total || 0), 0);
+      const total = orders.reduce((s, o) => s + orderFinal(o), 0);
+      const upCnt = orders.reduce((s, o) => s + popcornUp(o), 0);
       const peopleCnt = orders.reduce((s, o) => s + (o.names || []).length, 0);
       const qtyAll = rows.reduce((s, r) => s + r.qty, 0);
       const now = new Date();
@@ -194,19 +196,24 @@
       const etc = rows.filter((r) => !MENU.some((m) => m.id === r.id));
       menuRows += etc.map((r) => `<tr><td>${esc(itemLabel(r))}</td><td class="num">${won(r.price)}</td>
         <td class="num"><b>${r.qty}</b>개</td><td class="num">${won(r.amount)}</td></tr>`).join("");
+      if (upCnt) {
+        menuRows += `<tr class="cat-row"><td colspan="4">추가 요금</td></tr>
+          <tr><td>팝콘 맛 변경</td><td class="num">${won(POPCORN_UPCHARGE)}</td>
+          <td class="num"><b>${upCnt}</b>개</td><td class="num">${won(upCnt * POPCORN_UPCHARGE)}</td></tr>`;
+      }
 
       // 주문별
       const orderRows = sortedOrders().map((o, i) => `<tr>
         <td class="num">${i + 1}</td>
         <td class="names-cell">${shownNames(o).map(esc).join(", ")}${o.memo ? `<div class="small">💬 ${esc(o.memo)}</div>` : ""}</td>
-        <td>${(o.items || []).map((it) => `${esc(itemLabel(it))} ${it.qty}`).join(", ")}</td>
-        <td class="num">${won(o.total)}</td></tr>`).join("");
+        <td>${(o.items || []).map((it) => `${esc(itemLabel(it))} ${it.qty}`).join(", ")}${popcornUp(o) ? `<div class="extra-line">팝콘 맛 변경 +${won(orderExtra(o))}</div>` : ""}</td>
+        <td class="num">${won(orderFinal(o))}</td></tr>`).join("");
 
       $("#report").innerHTML = `
         <h2>🍿 신대 시네마 스낵바 주문 내역</h2>
         <div class="rsub">신대초등학교 워크숍 · ${stamp}</div>
         <div class="stats">
-          <div class="stat red"><div class="k">총 금액</div><div class="v">${won(total)}</div><div class="s">주문 ${orders.length}건 · ${peopleCnt}명</div></div>
+          <div class="stat red"><div class="k">총 금액</div><div class="v">${won(total)}</div><div class="s">${upCnt ? `팝콘 변경 추가금 ${won(upCnt * POPCORN_UPCHARGE)} 포함` : `주문 ${orders.length}건 · ${peopleCnt}명`}</div></div>
           <div class="stat"><div class="k">주문한 사람</div><div class="v">${peopleCnt}명</div><div class="s">주문 ${orders.length}건</div></div>
           <div class="stat"><div class="k">메뉴 수량</div><div class="v">${qtyAll}개</div><div class="s">${rows.length}종류</div></div>
           <div class="stat"><div class="k">1인 평균</div><div class="v">${won(peopleCnt ? Math.round(total / peopleCnt) : 0)}</div><div class="s">주문한 사람 기준</div></div>
@@ -237,13 +244,45 @@
             <td class="small">${orderCode(o.id)}</td>
             <td class="names-cell">${shownNames(o).map(esc).join("<br>")}</td>
             <td>${(o.items || []).map((it) => `${esc(itemLabel(it))} × ${it.qty}`).join("<br>")}
-              ${o.memo ? `<div class="small">💬 ${esc(o.memo)}</div>` : ""}</td>
-            <td class="num">${won(o.total)}<div class="small">/ ${won(lim)}</div></td>
+              ${o.memo ? `<div class="small">💬 ${esc(o.memo)}</div>` : ""}
+              ${popCtl(o)}</td>
+            <td class="num">${won(orderFinal(o))}${orderExtra(o) ? `<div class="small extra-line">추가 +${won(orderExtra(o))}</div>` : ""}<div class="small">/ ${won(lim)}</div></td>
             <td class="small">${fmtTime(o.createdAt)}</td>
             <td><button class="del" data-del="${o.id}">삭제</button></td>
           </tr>`;
         }).join("")}</tbody>` : `<tbody><tr><td style="padding:20px">주문이 없어요.</td></tr></tbody>`;
     }
+    // 팝콘 맛 변경 체크: 팝콘이 1개면 체크칸, 여러 개면 개수 조절
+    function popCtl(o) {
+      const max = popcornCount(o);
+      if (!max) return "";
+      const n = popcornUp(o);
+      if (max === 1) {
+        return `<label class="pop-ctl" style="margin-top:8px"><input type="checkbox" data-pop="${o.id}" ${n ? "checked" : ""}>
+          팝콘 맛 변경 (+${won(POPCORN_UPCHARGE)})</label>`;
+      }
+      return `<div class="pop-ctl" style="margin-top:8px">팝콘 맛 변경
+        <span class="qty ${n ? "has" : ""}"><button type="button" data-popset="${o.id}" data-v="${n - 1}" ${n ? "" : "disabled"}>−</button><b>${n}</b><button type="button" data-popset="${o.id}" data-v="${n + 1}" ${n < max ? "" : "disabled"}>+</button></span>
+        <span class="small">/ 팝콘 ${max}개 · 개당 +${won(POPCORN_UPCHARGE)}</span></div>`;
+    }
+    async function setPop(id, n) {
+      try {
+        await updateDoc(doc(db, COL_ORDERS, id), { popcornUp: n });
+        toast(n ? `팝콘 맛 변경 ${n}개 반영했어요` : "팝콘 맛 변경을 뺐어요");
+      } catch (err) {
+        console.error(err);
+        alert("저장하지 못했어요. Firebase 규칙을 새로 게시했는지 확인해 주세요.");
+        renderOrders();
+      }
+    }
+    $("#orderTable").addEventListener("change", (e) => {
+      const id = e.target.dataset.pop;
+      if (id) setPop(id, e.target.checked ? 1 : 0);
+    });
+    $("#orderTable").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-popset]");
+      if (b) setPop(b.dataset.popset, Number(b.dataset.v));
+    });
     $("#search").oninput = renderOrders;
     $("#orderTable").addEventListener("click", async (e) => {
       const b = e.target.closest("[data-del]");

@@ -120,7 +120,8 @@
     import {
       db, collection, addDoc, getDocs, deleteDoc, doc, onSnapshot, query, where, serverTimestamp,
       APP_VERSION, LIMIT_PER_PERSON, MAX_PEOPLE, COL_ORDERS, COL_META, CATEGORIES, MENU,
-      won, normName, esc, itemLabel, orderCode, fmtTime, toast, anproFallback
+      won, normName, esc, itemLabel, orderCode, fmtTime, toast, anproFallback,
+      popcornUp, orderFinal, POPCORN_UPCHARGE
     } from "./common.js";
 
     const $ = (s) => document.querySelector(s);
@@ -290,9 +291,10 @@
         ${showCode && o.id ? `<span class="code">No. ${orderCode(o.id)}</span>` : ""}
         <div class="who">${o.names.map(esc).join(" · ")}</div>
         <div class="meta">${o.names.length > 1 ? `${o.names.length}명 함께 주문` : "개인 주문"}${o.createdAt ? " · " + fmtTime(o.createdAt) : ""}</div>
-        <ul>${o.items.map((it) => `<li><span>${esc(itemLabel(it))} × ${it.qty}</span><span>${won(it.price * it.qty)}</span></li>`).join("")}</ul>
-        <div class="total"><span>합계</span><span>${won(o.total)}</span></div>
-        <div class="limit">한도 ${won(lim)} · 남은 금액 ${won(lim - o.total)}</div>
+        <ul>${o.items.map((it) => `<li><span>${esc(itemLabel(it))} × ${it.qty}</span><span>${won(it.price * it.qty)}</span></li>`).join("")}
+          ${popcornUp(o) ? `<li class="extra"><span>팝콘 맛 변경 추가금 × ${popcornUp(o)}</span><span>+${won(popcornUp(o) * POPCORN_UPCHARGE)}</span></li>` : ""}</ul>
+        <div class="total"><span>합계</span><span>${won(orderFinal(o))}</span></div>
+        <div class="limit">한도 ${won(lim)} · ${orderFinal(o) > lim ? `한도보다 ${won(orderFinal(o) - lim)} 많아요` : `남은 금액 ${won(lim - orderFinal(o))}`}</div>
         ${o.memo ? `<div class="memo">💬 ${esc(o.memo)}</div>` : ""}
       </div>`;
     }

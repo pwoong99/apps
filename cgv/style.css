@@ -350,3 +350,11 @@ table.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
 .seg { display: inline-flex; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 3px; flex: none; }
 .seg button { border: 0; background: transparent; padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--sub); }
 .seg button.on { background: var(--ink); color: #fff; }
+
+/* 팝콘 맛 변경 추가금 */
+.ticket li.extra, .extra-line { color: var(--red-dark); }
+.extra-line { font-size: 13px; font-weight: 600; margin-top: 4px; }
+.pop-ctl { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; white-space: nowrap; cursor: pointer; }
+.pop-ctl input { width: 20px; height: 20px; accent-color: var(--red); }
+.pop-ctl .qty button { width: 30px; height: 28px; font-size: 16px; }
+.tbl td.pop { white-space: nowrap; }
